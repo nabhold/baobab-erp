@@ -5,6 +5,8 @@ USER root
 COPY --chown=frappe:frappe apps/baobab_erp /opt/baobab_erp
 USER frappe
 
-RUN bench get-app --skip-assets file:///opt/baobab_erp \
+RUN cp -R /opt/baobab_erp apps/baobab_erp \
+ && ./env/bin/pip install --no-deps --editable apps/baobab_erp \
+ && (grep -qxF baobab_erp sites/apps.txt || echo baobab_erp >> sites/apps.txt) \
  && bench build --app baobab_erp \
  && rm -rf /opt/baobab_erp
