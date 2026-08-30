@@ -7,6 +7,6 @@ USER frappe
 
 RUN cp -R /opt/baobab_erp apps/baobab_erp \
  && ./env/bin/pip install --no-deps --editable apps/baobab_erp \
- && (grep -qxF baobab_erp sites/apps.txt || echo baobab_erp >> sites/apps.txt) \
+ && (grep -qxF baobab_erp sites/apps.txt || printf '\n%s\n' baobab_erp >> sites/apps.txt) \
  && bench build --app baobab_erp \
  && rm -rf /opt/baobab_erp
