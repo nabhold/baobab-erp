@@ -16,7 +16,7 @@ for path in Path(".").rglob("*.json"):
 print("JSON validation passed")
 PY
 
-if command -v docker >/dev/null 2>&1; then
+if [[ "${SKIP_COMPOSE_VALIDATION:-0}" != "1" ]] && command -v docker >/dev/null 2>&1; then
   DB_ROOT_PASSWORD=validation DB_PASSWORD=validation ADMIN_PASSWORD=validation \
   BAOBAB_EVENT_SIGNING_SECRET=validation \
   docker compose -f deploy/compose.yaml config --quiet

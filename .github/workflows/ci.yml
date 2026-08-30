@@ -16,13 +16,26 @@ jobs:
     permissions:
       contents: read
       packages: read
-    container:
-      image: ghcr.io/nabhold/baobab-dev:1.0.0
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Validate source, contracts, tests, and Compose model
-        run: bash scripts/validate.sh
+      - name: Authenticate to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+      - name: Validate source and contracts in the Baobab environment
+        run: >-
+          docker run --rm
+          --volume "${GITHUB_WORKSPACE}:/workspace"
+          --workdir /workspace
+          --env SKIP_COMPOSE_VALIDATION=1
+          ghcr.io/nabhold/baobab-dev:1.0.0
+          bash scripts/validate.sh
+      - name: Validate Compose model on the runner
+        env:
+          DB_ROOT_PASSWORD: validation
+          DB_PASSWORD: validation
+          ADMIN_PASSWORD: validation
+          BAOBAB_EVENT_SIGNING_SECRET: validation
+        run: docker compose -f deploy/compose.yaml config --quiet
 
   build-image:
     runs-on: ubuntu-26.04
