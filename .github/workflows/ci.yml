@@ -8,10 +8,14 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   foundation:
     runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      packages: read
     container:
       image: ghcr.io/nabhold/baobab-dev:1.0.0
     steps:
