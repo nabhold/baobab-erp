@@ -27,6 +27,7 @@ jobs:
           --volume "${GITHUB_WORKSPACE}:/workspace"
           --workdir /workspace
           --env SKIP_COMPOSE_VALIDATION=1
+          --env PYTHONPYCACHEPREFIX=/tmp/baobab-pyc
           ghcr.io/nabhold/baobab-dev:1.0.0
           bash scripts/validate.sh
       - name: Validate Compose model on the runner
