@@ -1,0 +1,168 @@
+x-backend-defaults: &backend-defaults
+  image: ${ERPNEXT_IMAGE:-baobab-erp:local}
+  restart: unless-stopped
+  depends_on:
+    configurator:
+      condition: service_completed_successfully
+  volumes:
+    - sites:/home/frappe/frappe-bench/sites
+    - logs:/home/frappe/frappe-bench/logs
+  environment:
+    DB_HOST: ${DB_HOST:-db}
+    DB_PORT: ${DB_PORT:-3306}
+    REDIS_CACHE: ${REDIS_CACHE:-redis-cache:6379}
+    REDIS_QUEUE: ${REDIS_QUEUE:-redis-queue:6379}
+
+services:
+  db:
+    image: mariadb:11.8
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - db-data:/var/lib/mysql
+
+  redis-cache:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  redis-queue:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - redis-queue-data:/data
+
+  configurator:
+    image: ${ERPNEXT_IMAGE:-baobab-erp:local}
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    entrypoint: ["bash", "-c"]
+    command:
+      - >-
+        bench set-config -g db_host ${DB_HOST:-db};
+        bench set-config -gp db_port ${DB_PORT:-3306};
+        bench set-config -g redis_cache redis://${REDIS_CACHE:-redis-cache:6379};
+        bench set-config -g redis_queue redis://${REDIS_QUEUE:-redis-queue:6379};
+        bench set-config -gp socketio_port ${SOCKETIO_PORT:-9000};
+
+  create-site:
+    <<: *backend-defaults
+    restart: "no"
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+    entrypoint: ["bash", "-c"]
+    command:
+      - >-
+        if [ ! -f sites/${FRAPPE_SITE_NAME:-baobab.localhost}/site_config.json ]; then
+          bench new-site ${FRAPPE_SITE_NAME:-baobab.localhost}
+          --mariadb-root-password "${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD}"
+          --admin-password "${ADMIN_PASSWORD:?Set ADMIN_PASSWORD}"
+          --db-name "${DB_NAME:-_baobab}"
+          --db-password "${DB_PASSWORD:?Set DB_PASSWORD}"
+          --install-app erpnext
+          --install-app baobab_erp;
+          bench --site ${FRAPPE_SITE_NAME:-baobab.localhost} set-config baobab_event_signing_secret "${BAOBAB_EVENT_SIGNING_SECRET:?Set BAOBAB_EVENT_SIGNING_SECRET}";
+        fi
+
+  backend:
+    <<: *backend-defaults
+    depends_on:
+      create-site:
+        condition: service_completed_successfully
+    command: ["bench", "serve", "--port", "8000"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/api/method/baobab_erp.api.health.live >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  frontend:
+    image: ${ERPNEXT_IMAGE:-baobab-erp:local}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+      websocket:
+        condition: service_started
+    command: ["nginx-entrypoint.sh"]
+    environment:
+      BACKEND: backend:8000
+      FRAPPE_SITE_NAME_HEADER: ${FRAPPE_SITE_NAME:-baobab.localhost}
+      SOCKETIO: websocket:9000
+      UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
+      UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
+      UPSTREAM_REAL_IP_RECURSIVE: "off"
+      PROXY_READ_TIMEOUT: 120
+      CLIENT_MAX_BODY_SIZE: 50m
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+
+  websocket:
+    <<: *backend-defaults
+    depends_on:
+      create-site:
+        condition: service_completed_successfully
+    command: ["node", "/home/frappe/frappe-bench/apps/frappe/socketio.js"]
+
+  queue-short:
+    <<: *backend-defaults
+    depends_on:
+      create-site:
+        condition: service_completed_successfully
+    command: ["bench", "worker", "--queue", "short,default"]
+
+  queue-long:
+    <<: *backend-defaults
+    depends_on:
+      create-site:
+        condition: service_completed_successfully
+    command: ["bench", "worker", "--queue", "long"]
+
+  scheduler:
+    <<: *backend-defaults
+    depends_on:
+      create-site:
+        condition: service_completed_successfully
+    command: ["bench", "schedule"]
+
+volumes:
+  db-data:
+  redis-queue-data:
+  sites:
+  logs:

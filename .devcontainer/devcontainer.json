@@ -1,0 +1,15 @@
+{
+  "name": "Baobab ERP",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "workspace",
+  "workspaceFolder": "/workspaces/baobab-erp",
+  "shutdownAction": "stopCompose",
+  "remoteUser": "vscode",
+  "forwardPorts": [8000, 9000],
+  "portsAttributes": {
+    "8000": {"label": "Frappe", "onAutoForward": "openPreview", "visibility": "private"},
+    "9000": {"label": "Frappe Realtime", "onAutoForward": "silent", "visibility": "private"}
+  },
+  "postCreateCommand": "bash scripts/dev/bootstrap.sh",
+  "postStartCommand": "bash scripts/dev/services.sh"
+}

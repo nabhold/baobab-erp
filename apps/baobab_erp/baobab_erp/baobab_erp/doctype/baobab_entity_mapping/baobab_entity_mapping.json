@@ -1,0 +1,34 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-08-30 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["tenant_id", "canonical_type", "canonical_id", "erpnext_doctype", "erpnext_name", "enabled", "source_revision", "last_synchronised_at"],
+ "fields": [
+  {"fieldname": "tenant_id", "fieldtype": "Link", "in_list_view": 1, "label": "Tenant ID", "options": "Baobab Tenant Mapping", "reqd": 1},
+  {"fieldname": "canonical_type", "fieldtype": "Select", "in_list_view": 1, "label": "Canonical Type", "options": "Organisation\nLegal Entity\nBusiness Unit\nFunction\nTeam\nUser\nCustomer\nSupplier\nItem\nWarehouse\nEmployee\nCost Centre\nProject\nLocation", "reqd": 1},
+  {"fieldname": "canonical_id", "fieldtype": "Data", "in_list_view": 1, "label": "Canonical ID", "reqd": 1},
+  {"fieldname": "erpnext_doctype", "fieldtype": "Link", "label": "ERPNext DocType", "options": "DocType", "reqd": 1},
+  {"fieldname": "erpnext_name", "fieldtype": "Dynamic Link", "label": "ERPNext Record", "options": "erpnext_doctype", "reqd": 1},
+  {"default": "1", "fieldname": "enabled", "fieldtype": "Check", "label": "Enabled"},
+  {"fieldname": "source_revision", "fieldtype": "Data", "label": "Source Revision"},
+  {"fieldname": "last_synchronised_at", "fieldtype": "Datetime", "label": "Last Synchronised At"}
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-08-30 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Baobab ERP",
+ "name": "Baobab Entity Mapping",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager", "share": 1, "write": 1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

@@ -1,0 +1,27 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    permissions:
+      contents: read
+    uses: nabhold/shared/.github/workflows/security-secrets-scan.yml@f8df9b90ffe8fef5cbf6d14a9bcf868f723d1464 # v1.1.0
+
+  codeql:
+    permissions:
+      contents: read
+      security-events: write
+      packages: read
+    uses: nabhold/shared/.github/workflows/security-codeql.yml@f8df9b90ffe8fef5cbf6d14a9bcf868f723d1464 # v1.1.0
+    with:
+      languages: '["python"]'

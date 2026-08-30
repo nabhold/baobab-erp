@@ -1,0 +1,28 @@
+[project]
+name = "baobab-erp"
+version = "0.1.0"
+description = "Baobab Platform integration and governance extensions for ERPNext"
+authors = [{ name = "Nabhold Group Africa" }]
+requires-python = ">=3.14,<3.15"
+readme = "README.md"
+license = { text = "GPL-3.0-only" }
+dependencies = []
+
+[build-system]
+requires = ["flit_core>=3.4,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.bench.frappe-dependencies]
+frappe = ">=16.21.0,<17.0.0"
+erpnext = ">=16.0.0,<17.0.0"
+
+[tool.ruff]
+line-length = 110
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "RUF"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "tab"

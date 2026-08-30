@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  foundation:
+    runs-on: ubuntu-26.04
+    container:
+      image: ghcr.io/nabhold/baobab-dev:1.0.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate source, contracts, tests, and Compose model
+        run: bash scripts/validate.sh
+
+  build-image:
+    runs-on: ubuntu-26.04
+    needs: foundation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build deployable ERP image
+        run: docker build --build-arg ERPNEXT_VERSION=v16.33.0 -f deploy/Dockerfile -t baobab-erp:test .

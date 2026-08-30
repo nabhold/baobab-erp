@@ -1,0 +1,24 @@
+schema_version: "1.0"
+updated: "2026-08-30"
+components:
+  frappe:
+    repository: "https://github.com/frappe/frappe"
+    ref: "v16.32.0"
+    compatibility_line: "version-16"
+  erpnext:
+    repository: "https://github.com/frappe/erpnext"
+    ref: "v16.33.0"
+    compatibility_line: "version-16"
+  baobab_erp:
+    path: "apps/baobab_erp"
+    version: "0.1.0"
+runtime:
+  database:
+    engine: "mariadb"
+    image: "mariadb:11.8"
+  redis:
+    image: "redis:7.4-alpine"
+policy:
+  vendor_upstream_source: false
+  direct_upstream_modification: false
+  upgrade_requires_compatibility_tests: true
