@@ -78,3 +78,9 @@ Foundation stage. The repository contains a deployable topology and installable 
 ## Licence
 
 GPL-3.0. See [LICENSE](LICENSE). Upstream Frappe and ERPNext retain their own copyright and licensing notices.
+
+## Foundation 4
+
+The Compose-backed Codespace uses `ghcr.io/nabhold/baobab-dev:1.2.6`. The
+SHA-pinned Foundation gate validates contracts and reproducibility and scans
+source, dependencies, secrets, configuration, and the ERP deployment image.
