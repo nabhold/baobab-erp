@@ -10,6 +10,6 @@
     "8000": {"label": "Frappe", "onAutoForward": "openPreview", "visibility": "private"},
     "9000": {"label": "Frappe Realtime", "onAutoForward": "silent", "visibility": "private"}
   },
-  "postCreateCommand": "bash scripts/dev/bootstrap.sh",
+  "postCreateCommand": "baobab-verify --contract && bash scripts/dev/bootstrap.sh",
   "postStartCommand": "bash scripts/dev/services.sh"
 }
