@@ -113,7 +113,13 @@ adrs:
       - upstream.lock.yaml
       - compose.yaml
       - idempiere/Dockerfile
-    gap: No CI image publishing, upgrade rehearsal, or release-manifest tooling yet.
+      - .trivyignore
+    gap: >
+      No CI image publishing, upgrade rehearsal, or release-manifest tooling yet.
+      .trivyignore documents a scoped, dated risk acceptance for HIGH/CRITICAL CVEs
+      in third-party libraries vendored inside the pinned idempiereofficial/idempiere
+      13-release image (no fixed build exists upstream as of 2026-09-06); it must be
+      re-reviewed whenever upstream.lock.yaml's iDempiere pin changes.
 
   - id: ADR-ERP-014
     title: ERP master data ownership, synchronisation and reference data architecture

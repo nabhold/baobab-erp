@@ -16,6 +16,12 @@ RUN mvn -q -B -f idempiere/extensions package
 
 FROM ${IDEMPIERE_IMAGE}
 
+# Pick up upstream Ubuntu security patches the pinned base image itself may be
+# behind on (e.g. openssl). This patches OS packages only; it does not touch
+# iDempiere or its bundled plugin jars, so it isn't a fork under ADR-ERP-004.
+USER root
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
 # Confirmed against idempiere/idempiere-docker's 13-release Dockerfile: IDEMPIERE_HOME
 # is /opt/idempiere, IDEMPIERE_PLUGINS_HOME is $IDEMPIERE_HOME/plugins, and the image
 # already creates and runs as a non-root "idempiere" user owning that tree.
