@@ -1,86 +1,103 @@
 # Baobab ERP
 
-Baobab ERP is the independently deployable ERP Engine of the Baobab Platform. It runs on Frappe Framework and ERPNext and adds a deliberately small Baobab custom application for tenancy context, canonical identity mapping, integration events, and audit metadata.
+Baobab ERP is the independently deployable ERP Engine of the Baobab Platform. It runs on
+iDempiere and adds Baobab-specific tenancy context, canonical identity mapping,
+integration events, and audit metadata through OSGi extensions and an application-service
+layer, per ADR-ERP-001 through ADR-ERP-020.
 
-It is an operational system and API provider. Subsidiary websites and frontends do not belong here.
+It is an operational system and API provider. Subsidiary websites and frontends do not
+belong here.
 
 ## Boundaries
 
 | Area | Owner | Rule |
 |---|---|---|
-| Frappe Framework | `frappe/frappe` | Installed from the pinned upstream release; never modified here |
-| ERPNext | `frappe/erpnext` | Installed from the pinned upstream release; standard DocTypes remain authoritative |
-| Baobab ERP app | `apps/baobab_erp` | Baobab-specific mappings, context, events, APIs, and audit fields |
+| iDempiere | `idempiere/idempiere` | Installed from the pinned upstream release; never modified here — see `idempiere/patches/README.md` |
+| Baobab OSGi extensions | `idempiere/extensions/` | Baobab-specific behaviour installed as additional plugins under `org.nabhold.baobab.erp.*` |
+| Application services | `modules/` | Context, mapping, events, outbox/inbox, reconciliation, provisioning — framework-free, backed by Protocol interfaces |
+| Baobab-owned schema | `db/` | Postgres migrations for the `baobab` schema, separate from iDempiere's own tables |
 | Canonical contracts | `nabhold/shared` | Organisation-wide identities and obligations; referenced, not redefined |
-| Engine contracts | `contracts` | ERP-owned API/event profiles conforming to shared governance |
-| Deployment | `deploy` | Docker/Bench topology and operational configuration |
+| Engine contracts | `contracts/` | ERP-owned API/event profiles conforming to shared governance |
+| Migration tooling | `migration/` | Scaffolding for a future ERPNext-source migration; currently unused — see `migration/README.md` |
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    Trade["Baobab Trade"] -->|"REST / signed events"| App["Baobab ERP app"]
+    Trade["Baobab Trade"] -->|"REST / signed events"| App["Baobab application services"]
     Pulse["Baobab Pulse"] -->|"signals / opportunities"| App
-    App --> ERP["ERPNext native DocTypes"]
+    CP["Baobab Control Plane"] -->|"CapabilityBinding / Mapping"| App
+    App --> Ext["Baobab OSGi extensions"]
+    Ext --> ERP["iDempiere"]
+    ERP --> DB["PostgreSQL"]
     App --> Outbox["Transactional outbox"]
-    ERP --> DB["MariaDB"]
-    Outbox -->|"webhook delivery"| Trade
+    Outbox -->|"signed events"| Trade
 ```
 
-There is no shared database between engines. Canonical identifiers are mapped to ERPNext records rather than replacing them.
+There is no shared database between engines. Canonical identifiers are mapped to
+iDempiere records rather than replacing them; see ADR-ERP-002 and ADR-ERP-007.
 
 ## Pinned upstream
 
-- Frappe Framework: `v16.32.0`
-- ERPNext: `v16.33.0`
-- Database: MariaDB 11.8 LTS
-- Redis: 7.4
+- iDempiere: `13-release` ("Orion" LTS)
+- Database: PostgreSQL 16
+- Java: 17
 
-See `upstream.lock.yaml`. Upgrades are reviewed changes and must run the compatibility suite.
+See `upstream.lock.yaml`. Upgrades are reviewed changes and must run the compatibility
+suite.
 
 ## Development
-
-The Codespaces configuration uses `ghcr.io/nabhold/baobab-dev:1.0.0` and initializes a native Bench workspace in `.bench`.
 
 ```bash
 cp .env.example .env
 ./scripts/dev/bootstrap.sh
-./scripts/dev/start.sh
 ```
 
-The first bootstrap creates `baobab.localhost`, installs ERPNext and `baobab_erp`, and leaves upstream repositories under `.bench/apps`. The source of the Baobab custom app remains this repository's `apps/baobab_erp` directory.
+The Codespaces configuration uses `ghcr.io/nabhold/baobab-dev:1.2.6` and provisions a
+PostgreSQL instance for the `modules/` test suite and Maven/Java for the OSGi extensions.
 
 ## Runtime
 
 ```bash
 cp .env.example .env
 # Replace every change-me value before continuing.
-docker compose -f deploy/compose.yaml build
-docker compose -f deploy/compose.yaml up -d
+docker compose build
+docker compose up -d
 ```
 
-This Compose topology is a production-oriented single-host baseline, not a claim that one host is sufficient forever. Production must terminate TLS at an approved reverse proxy, use managed secrets, external backups, monitoring, and tested recovery procedures.
+This Compose topology stands up the iDempiere + PostgreSQL runtime baseline (Phase 4). It
+is a production-oriented single-host baseline, not a claim that one host is sufficient
+forever. Production must terminate TLS at an approved reverse proxy, use managed secrets,
+external backups, monitoring, and tested recovery procedures.
 
 ## Documentation
 
-- [System architecture](docs/architecture/system.md)
-- [Tenancy and organisation mapping](docs/architecture/tenancy.md)
-- [Canonical mapping strategy](docs/architecture/entity-mapping.md)
-- [Integration architecture](docs/architecture/integrations.md)
-- [Deployment](docs/operations/deployment.md)
-- [Testing](docs/development/testing.md)
+- [System architecture](docs/architecture.md)
+- [Tenancy and organisation mapping](docs/tenancy.md)
+- [Integration architecture](docs/integration.md)
+- [Canonical events](docs/events.md)
+- [Development](docs/development.md)
+- [Testing](docs/testing.md)
+- [Security](docs/security.md)
+- [Operations](docs/operations.md)
+- [Provisioning](docs/provisioning.md)
 - [ADRs](docs/adr/README.md)
+- [Migration programme](docs/migration/00-target-architecture.md)
 
 ## Status
 
-Foundation stage. The repository contains a deployable topology and installable custom app skeleton with persistence and extension points. It does not yet contain subsidiary-specific ERP configuration or production credentials.
+Foundation stage, targeting iDempiere. This repository previously carried a Frappe/
+ERPNext foundation-stage scaffold with no tenant, financial, or transactional data ever
+created against it; it has been replaced outright rather than migrated, because there was
+nothing running to migrate from. See `docs/migration/erpnext-removal-report.md`.
+
+The repository contains a real, buildable OSGi extension skeleton, a Compose-based
+iDempiere + PostgreSQL runtime, and an application-service layer with unit-tested
+context/mapping/event logic. It does not yet contain LegalEntity accounting
+configuration, a wired iDempiere API client, or a production `EngineInstance` — see
+`architecture/conformance.yaml` for an honest per-ADR status ledger.
 
 ## Licence
 
-GPL-3.0. See [LICENSE](LICENSE). Upstream Frappe and ERPNext retain their own copyright and licensing notices.
-
-## Foundation 4
-
-The Compose-backed Codespace uses `ghcr.io/nabhold/baobab-dev:1.2.6`. The
-SHA-pinned Foundation gate validates contracts and reproducibility and scans
-source, dependencies, secrets, configuration, and the ERP deployment image.
+GPL-3.0. See [LICENSE](LICENSE). Upstream iDempiere retains its own copyright and
+licensing notices.

@@ -11,7 +11,7 @@ permissions:
   packages: read
 
 jobs:
-  foundation:
+  validate:
     runs-on: ubuntu-26.04
     permissions:
       contents: read
@@ -28,21 +28,32 @@ jobs:
           --workdir /workspace
           --env SKIP_COMPOSE_VALIDATION=1
           --env PYTHONPYCACHEPREFIX=/tmp/baobab-pyc
-          ghcr.io/nabhold/baobab-dev:1.0.0
+          ghcr.io/nabhold/baobab-dev:1.2.6
           bash scripts/validate.sh
-      - name: Validate Compose model on the runner
-        env:
-          DB_ROOT_PASSWORD: validation
-          DB_PASSWORD: validation
-          ADMIN_PASSWORD: validation
-          BAOBAB_EVENT_SIGNING_SECRET: validation
-        run: docker compose -f deploy/compose.yaml config --quiet
 
-  build-image:
+  compose-validate:
     runs-on: ubuntu-26.04
-    needs: foundation
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate Compose model
+        env:
+          DB_PASS: validation
+          DB_ADMIN_PASS: validation
+          BAOBAB_EVENT_SIGNING_SECRET: validation
+        run: docker compose -f compose.yaml config --quiet
+
+  build-extensions-and-image:
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Java
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Build Baobab OSGi extension bundles
+        run: mvn -q -B -f idempiere/extensions package
       - name: Build deployable ERP image
-        run: docker build --build-arg ERPNEXT_VERSION=v16.33.0 -f deploy/Dockerfile -t baobab-erp:test .
+        run: docker build -f idempiere/Dockerfile -t baobab-erp:test .

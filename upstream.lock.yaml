@@ -1,23 +1,23 @@
 schema_version: "1.0"
-updated: "2026-08-30"
+updated: "2026-09-06"
 components:
-  frappe:
-    repository: "https://github.com/frappe/frappe"
-    ref: "v16.32.0"
-    compatibility_line: "version-16"
-  erpnext:
-    repository: "https://github.com/frappe/erpnext"
-    ref: "v16.33.0"
-    compatibility_line: "version-16"
-  baobab_erp:
-    path: "apps/baobab_erp"
+  idempiere:
+    repository: "https://github.com/idempiere/idempiere"
+    image: "idempiereofficial/idempiere:13-release"
+    release_name: "Orion"
+    compatibility_line: "13-LTS"
+  baobab_erp_extensions:
+    path: "idempiere/extensions"
+    version: "0.1.0"
+  baobab_erp_modules:
+    path: "modules"
     version: "0.1.0"
 runtime:
   database:
-    engine: "mariadb"
-    image: "mariadb:11.8"
-  redis:
-    image: "redis:7.4-alpine"
+    engine: "postgresql"
+    image: "postgres:16-alpine"
+  java:
+    release: "17"
 policy:
   vendor_upstream_source: false
   direct_upstream_modification: false

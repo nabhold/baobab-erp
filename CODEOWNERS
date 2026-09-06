@@ -1,7 +1,10 @@
 * @nabhold/platform-engineering
-/apps/baobab_erp/ @nabhold/platform-engineering
+/idempiere/ @nabhold/platform-engineering
+/modules/ @nabhold/platform-engineering
+/db/ @nabhold/platform-engineering @nabhold/security
+/migration/ @nabhold/platform-engineering
 /contracts/ @nabhold/platform-engineering
-/deploy/ @nabhold/platform-engineering @nabhold/security
 /.github/ @nabhold/platform-engineering @nabhold/security
 /docs/adr/ @nabhold/platform-engineering
+/architecture/ @nabhold/platform-engineering
 /SECURITY.md @nabhold/security @nabhold/platform-engineering

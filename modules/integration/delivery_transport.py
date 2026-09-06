@@ -1,0 +1,40 @@
+import json
+import urllib.error
+import urllib.request
+from dataclasses import asdict, dataclass
+
+from events.envelope import EventEnvelope
+from security.signing import sign_body
+
+
+@dataclass(frozen=True, slots=True)
+class WebhookDestination:
+    url: str
+    signing_secret: str
+    timeout_seconds: float = 10.0
+
+
+class WebhookDeliveryError(Exception):
+    pass
+
+
+def deliver(envelope: EventEnvelope, destination: WebhookDestination) -> None:
+    """Deliver one event envelope over signed HTTPS. Raises on any non-2xx response.
+
+    Endpoint URL and signing secret are deployment configuration (ADR-ERP-005), never
+    hard-coded here.
+    """
+    body = json.dumps(asdict(envelope), default=str, separators=(",", ":"), sort_keys=True).encode()
+    signature = sign_body(body, destination.signing_secret)
+    request = urllib.request.Request(
+        destination.url,
+        data=body,
+        method="POST",
+        headers={"Content-Type": "application/json", "X-Baobab-Signature": signature},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=destination.timeout_seconds) as response:
+            if response.status >= 300:
+                raise WebhookDeliveryError(f"Unexpected status {response.status} from {destination.url}")
+    except urllib.error.URLError as exc:
+        raise WebhookDeliveryError(f"Delivery to {destination.url} failed: {exc}") from exc

@@ -6,4 +6,4 @@
 - `events/trade/` and `events/pulse/` are reserved for approved versioned event payload schemas.
 - Breaking changes create a new major-version schema; existing schemas remain available while consumers migrate.
 
-Payload schemas must never contain database table names or require another engine to understand ERPNext internals.
+Payload schemas must never contain database table names or require another engine to understand iDempiere internals.

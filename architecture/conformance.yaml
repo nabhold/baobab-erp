@@ -1,0 +1,164 @@
+# Honest per-ADR conformance ledger (ADR-ERP-020, Phase 30). This is checked in by hand
+# and reviewed alongside every architecturally significant change; it is not generated
+# from a coverage tool, so keep entries accurate rather than optimistic.
+#
+# status:
+#   foundation - the decision has real, working code demonstrating the pattern
+#   partial    - some of the decision is implemented and tested; a material gap remains
+#   planned    - decided in the ADR, not yet implemented
+schema_version: "1.0"
+updated: "2026-09-06"
+adrs:
+  - id: ADR-ERP-001
+    title: iDempiere as an isolated, headless, multi-tenant Baobab ERP engine
+    status: foundation
+    evidence:
+      - idempiere/Dockerfile
+      - compose.yaml
+      - idempiere/extensions/
+    gap: No production EngineInstance exists; no application-service HTTP layer yet.
+
+  - id: ADR-ERP-002
+    title: ERP tenant, client and organization mapping
+    status: partial
+    evidence:
+      - db/migrations/0002_create_tenant_mapping.sql
+      - modules/context/
+      - idempiere/extensions/org.nabhold.baobab.erp.context/
+    gap: No backing store implementation wired; both the OSGi bundle and modules/context fail closed by design until connected.
+
+  - id: ADR-ERP-003
+    title: ERP EngineInstance isolation, regional deployment and data residency
+    status: planned
+    evidence: []
+    gap: No EngineInstance/IsolationProfile implementation exists in this repository yet; owned jointly with nabhold/baobab-cp.
+
+  - id: ADR-ERP-004
+    title: Baobab iDempiere extension architecture
+    status: foundation
+    evidence:
+      - idempiere/extensions/org.nabhold.baobab.erp.context/
+      - idempiere/extensions/org.nabhold.baobab.erp.mapping/
+      - idempiere/patches/README.md
+    gap: Only 2 of the 8 reserved namespaces have a bundle; the rest are unimplemented by design until there is a real extension point to fill.
+
+  - id: ADR-ERP-005
+    title: Baobab ERP integration API architecture
+    status: partial
+    evidence:
+      - modules/integration/idempiere_client.py
+      - modules/integration/delivery_transport.py
+    gap: No real iDempiere-facing client implementation and no inbound HTTP server exist yet.
+
+  - id: ADR-ERP-006
+    title: ERP canonical event architecture
+    status: partial
+    evidence:
+      - modules/events/envelope.py
+      - modules/outbox/service.py
+      - modules/inbox/service.py
+      - db/migrations/0004_create_event_outbox.sql
+      - db/migrations/0005_create_event_inbox.sql
+      - contracts/events/
+    gap: Postgres-backed store implementations of OutboxStore/InboxStore are not written; logic is tested against in-memory fakes only.
+
+  - id: ADR-ERP-007
+    title: ERP canonical entity and external reference mapping architecture
+    status: partial
+    evidence:
+      - db/migrations/0003_create_entity_mapping.sql
+      - modules/mapping/
+      - idempiere/extensions/org.nabhold.baobab.erp.mapping/
+    gap: No backing store implementation wired; fails closed by design until connected.
+
+  - id: ADR-ERP-008
+    title: ERP financial, accounting and multi-currency architecture
+    status: planned
+    evidence: []
+    gap: No LegalEntity accounting configuration (chart of accounts, fiscal calendar, tax setup) exists yet.
+
+  - id: ADR-ERP-009
+    title: ERP market localisation, jurisdiction and regulatory architecture
+    status: planned
+    evidence: []
+    gap: Not started.
+
+  - id: ADR-ERP-010
+    title: ERP security, identity, authorization and tenant-isolation architecture
+    status: partial
+    evidence:
+      - modules/security/signing.py
+      - modules/context/resolver.py
+      - modules/identity/service.py
+      - tests/tenancy/test_context_resolver.py
+    gap: No real IdP/authentication integration; ServiceIdentity is a data carrier only.
+
+  - id: ADR-ERP-011
+    title: ERP observability, audit, reconciliation and operational control architecture
+    status: partial
+    evidence:
+      - modules/reconciliation/record_counts.py
+    gap: Only Layer 1 (record counts) reconciliation exists; Layers 2-4 and audit/observability tooling are not started.
+
+  - id: ADR-ERP-012
+    title: ERP high availability, backup, disaster recovery and business continuity architecture
+    status: planned
+    evidence: []
+    gap: Not started.
+
+  - id: ADR-ERP-013
+    title: ERP deployment, release, upgrade and configuration management architecture
+    status: partial
+    evidence:
+      - upstream.lock.yaml
+      - compose.yaml
+      - idempiere/Dockerfile
+    gap: No CI image publishing, upgrade rehearsal, or release-manifest tooling yet.
+
+  - id: ADR-ERP-014
+    title: ERP master data ownership, synchronisation and reference data architecture
+    status: planned
+    evidence: []
+    gap: Not started.
+
+  - id: ADR-ERP-015
+    title: ERP inventory, warehouse, procurement and supply-chain architecture
+    status: planned
+    evidence: []
+    gap: Not started.
+
+  - id: ADR-ERP-016
+    title: Commerce-ERP integration and order-to-cash architecture
+    status: planned
+    evidence: []
+    gap: Not started; depends on nabhold/baobab-trade integration work.
+
+  - id: ADR-ERP-017
+    title: ERP document, attachment, records retention and evidence architecture
+    status: planned
+    evidence: []
+    gap: Not started.
+
+  - id: ADR-ERP-018
+    title: ERP reporting, analytics, data export and intelligence integration architecture
+    status: planned
+    evidence: []
+    gap: Not started.
+
+  - id: ADR-ERP-019
+    title: ERP provisioning, tenant and legal-entity onboarding, migration and decommissioning architecture
+    status: partial
+    evidence:
+      - modules/provisioning/lifecycle.py
+      - tests/unit/test_provisioning_lifecycle.py
+      - migration/
+    gap: Lifecycle state machine only; no Control Plane wiring and no real migration source system.
+
+  - id: ADR-ERP-020
+    title: ERP production readiness, governance and architecture conformance
+    status: partial
+    evidence:
+      - architecture/conformance.yaml
+      - docs/migration/00-target-architecture.md
+      - docs/migration/01-capability-ownership-matrix.md
+    gap: The governance mechanism exists; production readiness itself has not been demonstrated (see the still-planned ADRs above).
