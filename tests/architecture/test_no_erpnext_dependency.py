@@ -32,7 +32,10 @@ PATTERN = re.compile(r"\b(erpnext|frappe|bench)\b", re.IGNORECASE)
 
 def _tracked_files() -> list[str]:
     result = subprocess.run(
-        ["git", "ls-files"],
+        # -c safe.directory=* avoids "detected dubious ownership" when this runs
+        # against a repo checked out by a different user/UID (e.g. a CI container
+        # with the workspace bind-mounted in), without touching global git config.
+        ["git", "-c", "safe.directory=*", "ls-files"],
         cwd=REPO_ROOT,
         check=True,
         capture_output=True,
