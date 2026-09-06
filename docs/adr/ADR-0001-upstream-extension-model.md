@@ -1,6 +1,6 @@
 # ADR-0001: Extend, Do Not Fork, Frappe and ERPNext
 
-- Status: Accepted
+- Status: Superseded by ADR-ERP-001 (iDempiere replaces Frappe/ERPNext as the Baobab ERP engine)
 - Date: 2026-08-30
 
 ## Context

@@ -1,0 +1,50 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.nabhold.baobab.erp</groupId>
+    <artifactId>baobab-erp-extensions</artifactId>
+    <version>0.1.0</version>
+  </parent>
+
+  <artifactId>org.nabhold.baobab.erp.mapping</artifactId>
+  <packaging>jar</packaging>
+
+  <name>Baobab ERP Mapping Bundle</name>
+  <description>
+    Reads CanonicalEntity/ExternalReference mappings to translate canonical identifiers
+    into iDempiere native record keys (C_BPartner, M_Product, M_Warehouse, ...) and back,
+    per ADR-ERP-007. Never treats an iDempiere ID as a canonical ID.
+  </description>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.osgi</groupId>
+      <artifactId>org.osgi.core</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>biz.aQute.bnd</groupId>
+        <artifactId>bnd-maven-plugin</artifactId>
+        <configuration>
+          <bnd><![CDATA[
+Bundle-SymbolicName: org.nabhold.baobab.erp.mapping
+Bundle-Activator: org.nabhold.baobab.erp.mapping.MappingActivator
+Bundle-Vendor: Nabhold Group Africa
+Export-Package: org.nabhold.baobab.erp.mapping
+Import-Package: *
+]]></bnd>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>

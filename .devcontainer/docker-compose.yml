@@ -5,46 +5,29 @@ services:
     volumes:
       - ..:/workspaces/baobab-erp:cached
     environment:
-      FRAPPE_SITE_NAME: baobab.localhost
-      DB_HOST: db
-      REDIS_CACHE: redis-cache:6379
-      REDIS_QUEUE: redis-queue:6379
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: idempiere
+      DB_USER: adempiere
+      DB_PASS: dev-only-password
+      DATABASE_URL: postgresql://adempiere:dev-only-password@postgres:5432/idempiere
     depends_on:
-      db:
-        condition: service_healthy
-      redis-cache:
-        condition: service_healthy
-      redis-queue:
+      postgres:
         condition: service_healthy
 
-  db:
-    image: mariadb:11.8
+  postgres:
+    image: postgres:16-alpine
     environment:
-      MARIADB_ROOT_PASSWORD: dev-root-only
-    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+      POSTGRES_DB: idempiere
+      POSTGRES_USER: adempiere
+      POSTGRES_PASSWORD: dev-only-password
     healthcheck:
-      test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
+      test: ["CMD-SHELL", "pg_isready -U adempiere -d idempiere"]
       interval: 5s
       timeout: 3s
       retries: 30
     volumes:
-      - mariadb-data:/var/lib/mysql
-
-  redis-cache:
-    image: redis:7.4-alpine
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
-  redis-queue:
-    image: redis:7.4-alpine
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
+      - postgres-data:/var/lib/postgresql/data
 
 volumes:
-  mariadb-data:
+  postgres-data:

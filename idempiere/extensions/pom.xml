@@ -1,0 +1,71 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>org.nabhold.baobab.erp</groupId>
+  <artifactId>baobab-erp-extensions</artifactId>
+  <version>0.1.0</version>
+  <packaging>pom</packaging>
+
+  <name>Baobab ERP — iDempiere Extensions</name>
+  <description>
+    OSGi bundles that extend iDempiere with Baobab-specific behaviour. See
+    docs/adr/ADR-ERP-004 for the extension architecture and idempiere/README.md for the
+    namespace and build conventions these modules follow. None of these modules modify
+    iDempiere core; they are installed as additional plugins.
+  </description>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>17</maven.compiler.release>
+    <osgi.core.version>6.0.0</osgi.core.version>
+    <bnd.version>7.0.0</bnd.version>
+  </properties>
+
+  <modules>
+    <module>org.nabhold.baobab.erp.context</module>
+    <module>org.nabhold.baobab.erp.mapping</module>
+  </modules>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.osgi</groupId>
+        <artifactId>org.osgi.core</artifactId>
+        <version>${osgi.core.version}</version>
+        <scope>provided</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>biz.aQute.bnd</groupId>
+          <artifactId>bnd-maven-plugin</artifactId>
+          <version>${bnd.version}</version>
+          <executions>
+            <execution>
+              <id>generate-manifest</id>
+              <goals>
+                <goal>bnd-process</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-jar-plugin</artifactId>
+          <version>3.4.1</version>
+          <configuration>
+            <archive>
+              <manifestFile>${project.build.outputDirectory}/META-INF/MANIFEST.MF</manifestFile>
+            </archive>
+          </configuration>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+</project>

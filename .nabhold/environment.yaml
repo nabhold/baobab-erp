@@ -23,4 +23,5 @@ validation:
     - "development.docker"
     - "development.github_cli"
 notes:
-  - "Frappe runtime uses MariaDB. The PostgreSQL capability is inherited from the current shared full profile and is not the ERP runtime database."
+  - "PostgreSQL is now the ERP runtime database (iDempiere + Baobab-owned schema)."
+  - "OSGi extension bundles require Java 17 and Maven; both are present in this session's base image, but baobab-dev's contract does not yet declare a languages.java capability. Track adding one under ADR-ERP-013 rather than assuming it silently."

@@ -1,0 +1,49 @@
+# iDempiere runtime baseline (Phase 4). Compose is the supported initial single-host
+# topology; production orchestration remains owned by nabhold/infrastructure per
+# ADR-ERP-013. This does not yet start the Baobab application-service layer
+# (modules/) as an HTTP service -- no web framework has been chosen for it yet, so
+# there is nothing running to containerize. See architecture/conformance.yaml.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-idempiere}
+      POSTGRES_USER: ${DB_USER:-adempiere}
+      POSTGRES_PASSWORD: ${DB_PASS:?Set DB_PASS}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-adempiere} -d ${DB_NAME:-idempiere}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  idempiere:
+    build:
+      context: .
+      dockerfile: idempiere/Dockerfile
+      args:
+        IDEMPIERE_IMAGE: ${IDEMPIERE_IMAGE:-idempiereofficial/idempiere:13-release}
+    image: ${IDEMPIERE_IMAGE_TAG:-baobab-idempiere:local}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-idempiere}
+      DB_USER: ${DB_USER:-adempiere}
+      DB_PASS: ${DB_PASS:?Set DB_PASS}
+      DB_ADMIN_PASS: ${DB_ADMIN_PASS:?Set DB_ADMIN_PASS}
+    ports:
+      - "${IDEMPIERE_HTTPS_PORT:-8443}:8443"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -kfsS https://127.0.0.1:8443/webui/ >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres-data:

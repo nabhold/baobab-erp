@@ -1,6 +1,6 @@
 # ADR-0002: Use a Frappe Site as the ERP Isolation Unit
 
-- Status: Accepted
+- Status: Superseded by ADR-ERP-001 (iDempiere replaces Frappe/ERPNext as the Baobab ERP engine)
 - Date: 2026-08-30
 
 ## Decision

@@ -2,8 +2,10 @@
 /.github/ @nabhold/platform-engineering @nabhold/security
 /.devcontainer/ @nabhold/platform-engineering
 /.nabhold/ @nabhold/platform-engineering
-/Dockerfile @nabhold/platform-engineering @nabhold/security
-/deploy/ @nabhold/platform-engineering @nabhold/security
-/apps/baobab_erp/ @nabhold/platform-engineering
+/compose.yaml @nabhold/platform-engineering @nabhold/security
+/idempiere/ @nabhold/platform-engineering
+/modules/ @nabhold/platform-engineering
+/db/ @nabhold/platform-engineering @nabhold/security
+/migration/ @nabhold/platform-engineering
 /contracts/ @nabhold/platform-engineering
 /SECURITY.md @nabhold/security

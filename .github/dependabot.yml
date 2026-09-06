@@ -21,7 +21,7 @@ updates:
     target-branch: "main"
 
   - package-ecosystem: "docker"
-    directory: "/deploy"
+    directory: "/idempiere"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -29,6 +29,21 @@ updates:
       timezone: "Africa/Johannesburg"
     open-pull-requests-limit: 5
     labels: ["dependencies", "docker"]
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+      include: "scope"
+    target-branch: "main"
+
+  - package-ecosystem: "maven"
+    directory: "/idempiere/extensions"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:30"
+      timezone: "Africa/Johannesburg"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "java"]
     commit-message:
       prefix: "chore"
       prefix-development: "chore"
