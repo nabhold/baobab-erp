@@ -16,8 +16,14 @@ reachable.
 docker compose up -d
 ```
 
-Brings up iDempiere (built from `idempiere/Dockerfile`, extension bundles included) and
-PostgreSQL. See `docs/operations.md` for production requirements.
+Brings up PostgreSQL, iDempiere (built from `idempiere/Dockerfile`, extension bundles
+included), and `baobab-app` (built from `modules/Dockerfile`, migrations applied
+automatically first). See `docs/operations.md` for production requirements.
+
+```bash
+curl http://localhost:8000/health/live
+curl http://localhost:8000/health/ready
+```
 
 ## Repository layout
 
