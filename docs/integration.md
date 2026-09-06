@@ -24,6 +24,14 @@ systemd timer) rather than as a long-lived daemon.
 
 - `modules/integration.idempiere_client` is the only module aware of iDempiere's actual
   API shape; every other module deals in canonical types.
+- `RestIdempiereClient` talks to iDempiere's REST API (the
+  `com.trekglobal.idempiere.rest.api` / `bxservice/idempiere-rest` plugin): one-step
+  JWT login (`POST /auth/tokens` with client/role/org/warehouse), automatic token
+  refresh (`POST /auth/refresh`) and one re-login retry on an unexpected 401, then
+  `GET/POST/PUT /models/{table}(/{id})`. Verified against that project's OpenAPI spec,
+  not assumed; see the module docstring and `tests/unit/test_idempiere_client.py`
+  (which runs against a real local HTTP server reproducing the spec's request/response
+  shapes, not a mocked urllib).
 - Add narrow, whitelisted operations for Baobab orchestration or stable business
   commands, not a 1:1 mirror of iDempiere windows/tabs.
 - Service identities receive the narrowest role set possible (`modules/identity`);
@@ -38,9 +46,13 @@ ERP command handler decides whether and how intelligence becomes an operational 
 ## Status
 
 The HTTP layer, outbox/inbox, and their Postgres-backed stores are wired end-to-end and
-covered by `tests/integration/` against a real database. What's still a fail-closed
-placeholder: `modules/integration.idempiere_client.UnconfiguredIdempiereClient` (no code
-anywhere calls iDempiere's own REST/JSON-RPC API yet) and the OSGi bundles'
-`BaobabContextResolver`/`BaobabMappingResolver` (nothing inside iDempiere calls them).
-Tracked in `architecture/conformance.yaml` against ADR-ERP-005, ADR-ERP-002 and
+covered by `tests/integration/` against a real database. `RestIdempiereClient` is a real,
+spec-verified implementation, tested against a fake server reproducing that spec -- but
+not yet against a real running iDempiere instance, because the REST API plugin it talks
+to **is not part of the pinned `idempiereofficial/idempiere` image**. It's a separate
+OSGi bundle that has to be built (Maven/Tycho) and installed into a running instance
+through iDempiere's p2 provisioning tooling; `idempiere/Dockerfile` does not do this yet.
+See `idempiere/README.md` and `architecture/conformance.yaml` against ADR-ERP-005 and
+ADR-ERP-013. The OSGi bundles' `BaobabContextResolver`/`BaobabMappingResolver` are also
+still unwired (nothing inside iDempiere calls them) -- tracked against ADR-ERP-002 and
 ADR-ERP-007.

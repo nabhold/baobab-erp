@@ -47,12 +47,26 @@ cd idempiere/extensions
 mvn -q package
 ```
 
-Each module produces a manifest-complete OSGi bundle jar under `target/`. Installing a
-built bundle into a running iDempiere instance is a matter of copying its jar into the
-instance's plugins directory (or a p2/feature repository once `features/` is populated)
-and is not yet automated by `Dockerfile`, which currently only pins and stages the
-upstream base image. Wiring bundle installation into the image build is tracked in
-`architecture/conformance.yaml` against ADR-ERP-013.
+Each module produces a manifest-complete OSGi bundle jar under `target/`. `Dockerfile`
+builds these itself (a `maven:3.9-eclipse-temurin-17` stage) and copies the jars straight
+into the pinned image's plugins directory (`/opt/idempiere/plugins`) — `docker build -f
+idempiere/Dockerfile .` is self-contained, no separate `mvn package` step required first.
+A p2/feature repository (`features/`) is unnecessary at two bundles; see that
+directory's README for when it would be worth adding.
+
+## Third-party plugins are not automatic
+
+Copying a jar into the plugins directory (as `Dockerfile` does for our own bundles) only
+works for plugins that ship as a plain OSGi bundle. Some third-party plugins — notably
+the REST API (`com.trekglobal.idempiere.rest.api`, see
+`modules/integration/idempiere_client.py`) — are distributed as source that must be
+built with Maven/Tycho and installed into a running instance through iDempiere's own p2
+provisioning tooling (`update-rest-extensions.sh` in
+[bxservice/idempiere-rest](https://github.com/bxservice/idempiere-rest)), not by copying
+a jar at image-build time. That installation is not yet wired into `Dockerfile` or
+`compose.yaml`; until it is, `idempiere` in this repository's runtime has no REST API to
+answer `RestIdempiereClient`'s requests, even though the client itself is real and
+tested. Tracked in `architecture/conformance.yaml` against ADR-ERP-005 and ADR-ERP-013.
 
 ## Runtime dependency
 

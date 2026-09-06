@@ -56,13 +56,19 @@ adrs:
       - modules/integration/idempiere_client.py
       - modules/integration/delivery_transport.py
       - modules/application/server.py
+      - tests/unit/test_idempiere_client.py
       - tests/integration/test_http_server.py
     gap: >
-      The inbound HTTP server now exists and is tested end-to-end (health checks,
-      signed webhook receipt). modules/integration/idempiere_client.py is still a
-      fail-closed placeholder -- no code anywhere calls into iDempiere's own REST/
-      JSON-RPC API yet, so canonical operations cannot actually read or write
-      iDempiere records. That remains the most consequential gap in this ADR.
+      The inbound HTTP server exists and is tested end-to-end (health checks, signed
+      webhook receipt). RestIdempiereClient is now a real implementation (one-step JWT
+      login, automatic token refresh, get/create/update against /models/{table}),
+      verified against the com.trekglobal.idempiere.rest.api / bxservice/idempiere-rest
+      OpenAPI spec and tested against a fake server reproducing that spec exactly --
+      but not yet against a real running iDempiere instance, because that REST API
+      plugin is not part of the pinned idempiereofficial/idempiere image and is not
+      yet installed by idempiere/Dockerfile (see idempiere/README.md). Until that
+      installation is wired up, no canonical operation can actually reach a live
+      iDempiere; that remains the most consequential gap in this ADR.
 
   - id: ADR-ERP-006
     title: ERP canonical event architecture
@@ -166,7 +172,10 @@ adrs:
       acceptance for HIGH/CRITICAL CVEs in third-party libraries vendored inside the
       pinned idempiereofficial/idempiere 13-release image (no fixed build exists
       upstream as of 2026-09-06); it must be re-reviewed whenever
-      upstream.lock.yaml's iDempiere pin changes.
+      upstream.lock.yaml's iDempiere pin changes. Not yet wired: installing the
+      com.trekglobal.idempiere.rest.api plugin (a Maven/Tycho build + p2 provisioning
+      step, not a jar copy) that RestIdempiereClient needs a live instance to expose
+      -- see idempiere/README.md and ADR-ERP-005.
 
   - id: ADR-ERP-014
     title: ERP master data ownership, synchronisation and reference data architecture
