@@ -1,5 +1,0 @@
-Metadata-Version: 2.4
-Name: baobab-erp-modules
-Version: 0.1.0
-Summary: Baobab ERP application-service layer: context, mapping, events, and integration boundary in front of iDempiere.
-Requires-Python: >=3.11
