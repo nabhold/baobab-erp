@@ -1,10 +1,18 @@
-# Pinned upstream iDempiere release plus Baobab OSGi extension bundles.
-# See idempiere/README.md and ADR-ERP-001 / ADR-ERP-004.
+# Multi-stage build: compile the Baobab OSGi extension bundles, then stage them into
+# the pinned iDempiere runtime image. This is self-contained -- `docker build -f
+# idempiere/Dockerfile .` needs no separate `mvn package` step first, since generic
+# tooling (including this repository's own foundation/vulnerability-scan workflow)
+# invokes `docker build` directly with no knowledge of a Maven prerequisite.
 #
 # Build context is the repository root (see compose.yaml: context: ., dockerfile:
 # idempiere/Dockerfile), so COPY sources below are rooted at the repo root, not at
 # this directory.
 ARG IDEMPIERE_IMAGE=idempiereofficial/idempiere:13-release
+
+FROM maven:3.9-eclipse-temurin-17 AS extensions-builder
+WORKDIR /build
+COPY idempiere/extensions/ idempiere/extensions/
+RUN mvn -q -B -f idempiere/extensions package
 
 FROM ${IDEMPIERE_IMAGE}
 
@@ -13,7 +21,7 @@ FROM ${IDEMPIERE_IMAGE}
 # already creates and runs as a non-root "idempiere" user owning that tree.
 ARG IDEMPIERE_PLUGINS_DIR=/opt/idempiere/plugins
 
-COPY --chown=idempiere:idempiere idempiere/extensions/org.nabhold.baobab.erp.context/target/org.nabhold.baobab.erp.context-*.jar ${IDEMPIERE_PLUGINS_DIR}/
-COPY --chown=idempiere:idempiere idempiere/extensions/org.nabhold.baobab.erp.mapping/target/org.nabhold.baobab.erp.mapping-*.jar ${IDEMPIERE_PLUGINS_DIR}/
+COPY --from=extensions-builder --chown=idempiere:idempiere /build/idempiere/extensions/org.nabhold.baobab.erp.context/target/org.nabhold.baobab.erp.context-*.jar ${IDEMPIERE_PLUGINS_DIR}/
+COPY --from=extensions-builder --chown=idempiere:idempiere /build/idempiere/extensions/org.nabhold.baobab.erp.mapping/target/org.nabhold.baobab.erp.mapping-*.jar ${IDEMPIERE_PLUGINS_DIR}/
 
 USER idempiere

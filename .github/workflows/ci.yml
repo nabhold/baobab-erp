@@ -43,7 +43,7 @@ jobs:
           BAOBAB_EVENT_SIGNING_SECRET: validation
         run: docker compose -f compose.yaml config --quiet
 
-  build-extensions-and-image:
+  build-extensions:
     runs-on: ubuntu-26.04
     steps:
       - name: Checkout
@@ -55,5 +55,11 @@ jobs:
           java-version: "17"
       - name: Build Baobab OSGi extension bundles
         run: mvn -q -B -f idempiere/extensions package
+
+  build-image:
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build deployable ERP image
         run: docker build -f idempiere/Dockerfile -t baobab-erp:test .

@@ -4,7 +4,9 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${repo_root}"
 
-pip install -e modules
+# baobab-dev ships a PEP 668 externally-managed system Python; this installs only our
+# own local editable package into it, which is the standard exception to that guard.
+pip install --break-system-packages -q -e modules
 
 if command -v mvn >/dev/null 2>&1; then
   mvn -q -f idempiere/extensions package

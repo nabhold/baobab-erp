@@ -4,8 +4,6 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 
-pip install -q -e modules
-
 python -m compileall -q modules tests
 
 PYTHONPATH=modules python -m unittest discover -s tests/unit -p 'test_*.py'

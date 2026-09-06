@@ -13,9 +13,9 @@ Before submitting:
 ./scripts/validate.sh
 ```
 
-This installs `modules/` in editable mode, runs the unit/security/tenancy/contract/
-architecture test suites, validates every tracked JSON file, builds the OSGi extension
-bundles with Maven, and validates the Compose model.
+This runs the unit/security/tenancy/contract/architecture test suites (against
+`modules/` on `PYTHONPATH`, no install needed), validates every tracked JSON file,
+builds the OSGi extension bundles with Maven, and validates the Compose model.
 
 Changes to `contracts/` must be backward compatible within a major version. Event fields
 are additive; consumers must ignore unknown fields. Breaking changes require a new schema
