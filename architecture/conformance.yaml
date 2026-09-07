@@ -109,6 +109,10 @@ adrs:
       remains. Until someone supplies that repository, no canonical operation can
       actually reach a live iDempiere; that remains the most consequential gap in this
       ADR, though the installation half of it is no longer unverified guesswork.
+      Separately, the HTTP surface this ADR governs (modules/application/server.py)
+      is not yet the boundary API nabhold/shared publishes at contracts/erp/v1/openapi.yaml
+      -- see contracts.lock.yaml and docs/reconciliation-plan.md (Phase 3) for the
+      gap and what blocks closing it (no HTTP framework chosen yet, no auth).
 
   - id: ADR-ERP-006
     title: ERP canonical event architecture
@@ -143,7 +147,16 @@ adrs:
       supports today, but worth revisiting if/when ADR-ERP-013 moves past it; and
       there's no retry/backoff between ticks beyond dispatch_worker.py's own
       per-event backoff, so a failed tick just waits for the next fixed-interval
-      attempt.
+      attempt. Separately: EventEnvelope (modules/events/envelope.py) and
+      contracts/events/envelope.schema.json are baobab-erp's own bespoke shape,
+      not nabhold/shared's published CloudEvents 1.0 envelope
+      (contracts/events/v1/envelope.schema.json) -- nabhold/shared itself now
+      archives this repo's shape as the legacy fixture
+      contracts/events/v1/compatibility/legacy-trade-erp-event.json. See
+      contracts.lock.yaml and docs/reconciliation-plan.md (Phase 1) for the exact
+      field-level drift and why migrating the wrapper alone, ahead of Phase 2's
+      canonical-id work, isn't done yet. baobab-trade has not integrated
+      contracts/erp/v1 either, so this is readiness work, not an active break.
 
   - id: ADR-ERP-007
     title: ERP canonical entity and external reference mapping architecture
@@ -177,7 +190,12 @@ adrs:
       still open: C_Payment, M_InOut and M_Warehouse are in section 170's full
       mapping matrix but not yet in its checklist or wired here -- adding one is a
       one-line filter change in EventsActivator, not new code, since the handler
-      reads "tableName" generically.
+      reads "tableName" generically. Separately: baobab.entity_mapping's own shape
+      (bare-UUID canonical_id, 2-value status enum, no legal_entity_id or temporal
+      fields) has drifted from nabhold/shared's published
+      contracts/erp/v1/mapping.schema.json -- see contracts.lock.yaml and
+      docs/reconciliation-plan.md (Phase 2), which is itself blocked on this repo
+      not yet having a Control Plane integration to source legal_entity_id from.
 
   - id: ADR-ERP-008
     title: ERP financial, accounting and multi-currency architecture

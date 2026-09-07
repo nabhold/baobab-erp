@@ -93,3 +93,13 @@ still isn't done, since it needs network access this environment doesn't have --
 `idempiere/rest-api/README.md` for exactly what's confirmed working, what's still
 missing, and how to supply one. See also `idempiere/README.md` and
 `architecture/conformance.yaml` against ADR-ERP-005 and ADR-ERP-013.
+
+Everything above describes baobab-erp's *own* integration surface, which predates
+and has drifted from `nabhold/shared`'s now-published, canonical
+`contracts/erp/v1` and `contracts/events/v1` packages -- the event envelope shape,
+the HTTP boundary API, and the mapping data model here are not yet those contracts.
+`contracts.lock.yaml` (repo root) pins the `nabhold/shared` commit this repo tracks,
+same pattern `nabhold/baobab-trade` uses; `docs/reconciliation-plan.md` is the
+phased plan for closing that drift, and states plainly why it hasn't happened yet
+(Trade itself hasn't integrated `contracts/erp/v1`, so this is readiness work
+ahead of any live consumer, not an active break).
