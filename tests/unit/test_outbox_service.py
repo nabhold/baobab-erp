@@ -1,6 +1,22 @@
 import unittest
+from datetime import UTC, datetime
 
+from events.envelope import EventEnvelope
 from outbox.service import backoff_seconds, dispatch_pending
+
+
+def _envelope(event_id: str) -> EventEnvelope:
+    return EventEnvelope(
+        event_id=event_id,
+        event_type="erp.payment.completed.v1",
+        schema_version="1.0",
+        occurred_at=datetime.now(UTC),
+        source="baobab-erp",
+        correlation_id="cor-1",
+        tenant_id="tenant-1",
+        entity_id="THAMANI-GLOBAL",
+        payload={},
+    )
 
 
 class FakeRecord:
@@ -8,6 +24,7 @@ class FakeRecord:
         self.name = name
         self.attempts = attempts
         self.status = status
+        self.envelope = _envelope(name)
 
 
 class FakeStore:
@@ -35,12 +52,12 @@ class FakeStore:
 
 
 class AlwaysFailsTransport:
-    def deliver(self, record):
+    def deliver(self, envelope):
         raise ConnectionError("no route to destination")
 
 
 class AlwaysSucceedsTransport:
-    def deliver(self, record):
+    def deliver(self, envelope):
         return None
 
 

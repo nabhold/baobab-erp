@@ -24,6 +24,15 @@
       <groupId>org.osgi</groupId>
       <artifactId>org.osgi.core</artifactId>
     </dependency>
+    <dependency>
+      <groupId>org.nabhold.baobab.erp</groupId>
+      <artifactId>org.nabhold.baobab.erp.integration</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+    </dependency>
   </dependencies>
 
   <build>
@@ -37,13 +46,17 @@ Bundle-SymbolicName: org.nabhold.baobab.erp.mapping
 Bundle-Activator: org.nabhold.baobab.erp.mapping.MappingActivator
 Bundle-Vendor: Nabhold Group Africa
 Export-Package: org.nabhold.baobab.erp.mapping
-Import-Package: *
+Import-Package: org.nabhold.baobab.erp.integration;version="[0.1,1)",*
 ]]></bnd>
         </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-jar-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
       </plugin>
     </plugins>
   </build>

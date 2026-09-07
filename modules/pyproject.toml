@@ -3,7 +3,9 @@ name = "baobab-erp-modules"
 version = "0.1.0"
 description = "Baobab ERP application-service layer: context, mapping, events, and integration boundary in front of iDempiere."
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "psycopg[binary]>=3.1,<4",
+]
 
 [build-system]
 requires = ["setuptools>=68"]

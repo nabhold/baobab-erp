@@ -63,3 +63,33 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build deployable ERP image
         run: docker build -f idempiere/Dockerfile -t baobab-erp:test .
+      - name: Build deployable application-service image
+        run: docker build -f modules/Dockerfile -t baobab-app:test .
+
+  integration:
+    runs-on: ubuntu-26.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: baobab_test
+          POSTGRES_USER: baobab
+          POSTGRES_PASSWORD: baobab
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U baobab -d baobab_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://baobab:baobab@localhost:5432/baobab_test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install modules/ with its Postgres driver
+        run: pip install --break-system-packages -q -e modules
+      - name: Apply database migrations
+        run: ./db/migrate.sh
+      - name: Run integration tests against real Postgres
+        run: PYTHONPATH=modules python3 -m unittest discover -s tests/integration -p 'test_*.py' -v

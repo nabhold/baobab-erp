@@ -18,13 +18,24 @@ class WebhookDeliveryError(Exception):
     pass
 
 
+def _to_wire_dict(envelope: EventEnvelope) -> dict:
+    """asdict() plus an occurred_at rendered per contracts/events/envelope.schema.json's
+    date-time format (RFC 3339, 'T' separator) rather than str(datetime)'s space
+    separator, which Python's own parser accepts but other engines' JSON Schema
+    validators would reject.
+    """
+    value = asdict(envelope)
+    value["occurred_at"] = envelope.occurred_at.isoformat().replace("+00:00", "Z")
+    return value
+
+
 def deliver(envelope: EventEnvelope, destination: WebhookDestination) -> None:
     """Deliver one event envelope over signed HTTPS. Raises on any non-2xx response.
 
     Endpoint URL and signing secret are deployment configuration (ADR-ERP-005), never
     hard-coded here.
     """
-    body = json.dumps(asdict(envelope), default=str, separators=(",", ":"), sort_keys=True).encode()
+    body = json.dumps(_to_wire_dict(envelope), separators=(",", ":"), sort_keys=True).encode()
     signature = sign_body(body, destination.signing_secret)
     request = urllib.request.Request(
         destination.url,

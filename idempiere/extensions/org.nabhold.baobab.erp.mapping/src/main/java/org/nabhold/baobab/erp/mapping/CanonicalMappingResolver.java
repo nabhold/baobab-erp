@@ -7,9 +7,12 @@ package org.nabhold.baobab.erp.mapping;
  */
 public interface CanonicalMappingResolver {
 
-    NativeRecordRef resolveToNative(String canonicalType, String canonicalId) throws MappingNotFoundException;
+    /** Mappings are scoped per tenant (db/migrations/0003_create_entity_mapping.sql);
+     * omitting tenantId here would risk resolving another tenant's mapping. */
+    NativeRecordRef resolveToNative(String tenantId, String canonicalType, String canonicalId)
+            throws MappingNotFoundException;
 
-    String resolveToCanonical(String nativeTable, int nativeId) throws MappingNotFoundException;
+    String resolveToCanonical(String tenantId, String nativeTable, int nativeId) throws MappingNotFoundException;
 
     record NativeRecordRef(String table, int recordId) {
     }

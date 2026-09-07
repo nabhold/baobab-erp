@@ -13,7 +13,7 @@ public interface ContextResolver {
      */
     ResolvedContext resolve(String tenantId, String legalEntityId) throws ContextResolutionException;
 
-    record ResolvedContext(int adClientId, int adOrgId, String canonicalMappingId) {
+    record ResolvedContext(int adClientId, int adOrgId) {
     }
 
     class ContextResolutionException extends Exception {

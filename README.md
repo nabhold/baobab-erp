@@ -91,11 +91,13 @@ ERPNext foundation-stage scaffold with no tenant, financial, or transactional da
 created against it; it has been replaced outright rather than migrated, because there was
 nothing running to migrate from. See `docs/migration/erpnext-removal-report.md`.
 
-The repository contains a real, buildable OSGi extension skeleton, a Compose-based
-iDempiere + PostgreSQL runtime, and an application-service layer with unit-tested
-context/mapping/event logic. It does not yet contain LegalEntity accounting
-configuration, a wired iDempiere API client, or a production `EngineInstance` — see
-`architecture/conformance.yaml` for an honest per-ADR status ledger.
+The repository contains a real, buildable OSGi extension skeleton; a Compose-based
+runtime for PostgreSQL, iDempiere, and the `baobab-app` HTTP service; and an
+application-service layer with Postgres-backed context/mapping/outbox/inbox stores and
+an inbound event webhook, tested against a real database in `tests/integration/`. It
+does not yet contain LegalEntity accounting configuration, a wired iDempiere API client,
+or a production `EngineInstance` — see `architecture/conformance.yaml` for an honest
+per-ADR status ledger.
 
 ## Licence
 

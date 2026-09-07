@@ -9,6 +9,7 @@ class OutboxRecord(Protocol):
     name: str
     attempts: int
     status: str
+    envelope: EventEnvelope
 
 
 class OutboxStore(Protocol):
@@ -31,7 +32,7 @@ class OutboxStore(Protocol):
 
 
 class EventTransport(Protocol):
-    def deliver(self, envelope_record: OutboxRecord) -> None: ...
+    def deliver(self, envelope: EventEnvelope) -> None: ...
 
 
 def backoff_seconds(attempt: int) -> int:
@@ -43,7 +44,7 @@ def dispatch_pending(store: OutboxStore, transport: EventTransport) -> None:
     for record in store.pending():
         attempts = record.attempts + 1
         try:
-            transport.deliver(record)
+            transport.deliver(record.envelope)
             store.mark_delivered(record.name)
         except Exception as exc:  # noqa: BLE001 - transport failures are expected and retried
             if attempts >= MAX_ATTEMPTS:

@@ -26,3 +26,11 @@ parses events are not allowed to drift apart.
 webhook-based transport, signing every payload with `modules/security.signing.sign_body`.
 Failed deliveries retry with exponential backoff (`outbox.service.backoff_seconds`, capped
 at one hour) up to `outbox.service.MAX_ATTEMPTS` before moving to a dead-letter state.
+`occurred_at` is serialised as RFC 3339 (`T`/`Z`), not `str(datetime)`'s space-separated
+form -- other engines' JSON Schema validators require that; see
+`tests/unit/test_delivery_transport.py`.
+
+`modules/outbox/postgres_store.py` and `modules/inbox/postgres_store.py` are the real
+backing stores (`modules/application/dispatch_worker.py` wires the former to delivery);
+`tests/integration/` exercises the full record → dispatch → deliver → mark-delivered and
+receive → verify → deduplicate → persist paths against a live PostgreSQL database.

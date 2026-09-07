@@ -1,0 +1,60 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.nabhold.baobab.erp</groupId>
+    <artifactId>baobab-erp-extensions</artifactId>
+    <version>0.1.0</version>
+  </parent>
+
+  <artifactId>org.nabhold.baobab.erp.integration</artifactId>
+  <packaging>jar</packaging>
+
+  <name>Baobab ERP Integration Bundle</name>
+  <description>
+    Shared library bundle used by the other Baobab OSGi extensions to reach the
+    baobab-app HTTP service (modules/application/server.py) -- the boundary through
+    which code running inside iDempiere's own JVM reaches the baobab Postgres schema,
+    since it has no direct database access of its own. See ADR-ERP-005. Exports
+    packages for other bundles to compile/import against; registers no OSGi service
+    of its own.
+  </description>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.osgi</groupId>
+      <artifactId>org.osgi.core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>biz.aQute.bnd</groupId>
+        <artifactId>bnd-maven-plugin</artifactId>
+        <configuration>
+          <bnd><![CDATA[
+Bundle-SymbolicName: org.nabhold.baobab.erp.integration
+Bundle-Vendor: Nabhold Group Africa
+Export-Package: org.nabhold.baobab.erp.integration
+Import-Package: *
+]]></bnd>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>

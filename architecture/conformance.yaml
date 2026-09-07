@@ -23,9 +23,21 @@ adrs:
     status: partial
     evidence:
       - db/migrations/0002_create_tenant_mapping.sql
-      - modules/context/
+      - modules/context/postgres_store.py
+      - modules/application/server.py
+      - tests/integration/test_postgres_context_store.py
+      - tests/integration/test_http_server.py
       - idempiere/extensions/org.nabhold.baobab.erp.context/
-    gap: No backing store implementation wired; both the OSGi bundle and modules/context fail closed by design until connected.
+      - idempiere/extensions/org.nabhold.baobab.erp.integration/
+    gap: >
+      modules/context resolves against a real Postgres-backed store, exposed over
+      HTTP at GET /context/resolve. BaobabContextResolver (the OSGi bundle running
+      inside iDempiere) now calls that endpoint for real -- tested against a real
+      local HTTP server reproducing the exact response shape -- instead of always
+      failing closed. What's still missing: no extension point inside iDempiere
+      (event handler, model validator) actually invokes the registered
+      ContextResolver OSGi service during a real request yet, so the loop is
+      real end-to-end in tests but not yet exercised by iDempiere itself.
 
   - id: ADR-ERP-003
     title: ERP EngineInstance isolation, regional deployment and data residency
@@ -39,8 +51,14 @@ adrs:
     evidence:
       - idempiere/extensions/org.nabhold.baobab.erp.context/
       - idempiere/extensions/org.nabhold.baobab.erp.mapping/
+      - idempiere/extensions/org.nabhold.baobab.erp.integration/
       - idempiere/patches/README.md
-    gap: Only 2 of the 8 reserved namespaces have a bundle; the rest are unimplemented by design until there is a real extension point to fill.
+    gap: >
+      3 of the 8 reserved namespaces have a bundle; the rest are unimplemented by
+      design until there is a real extension point to fill. `integration` is a
+      library bundle (no Activator, no published OSGi service) that `context` and
+      `mapping` both depend on for reaching baobab-app over HTTP -- a real,
+      inter-bundle OSGi dependency (Import/Export-Package), not just shared source.
 
   - id: ADR-ERP-005
     title: Baobab ERP integration API architecture
@@ -48,28 +66,62 @@ adrs:
     evidence:
       - modules/integration/idempiere_client.py
       - modules/integration/delivery_transport.py
-    gap: No real iDempiere-facing client implementation and no inbound HTTP server exist yet.
+      - modules/application/server.py
+      - tests/unit/test_idempiere_client.py
+      - tests/integration/test_http_server.py
+    gap: >
+      The inbound HTTP server exists and is tested end-to-end (health checks, signed
+      webhook receipt). RestIdempiereClient is now a real implementation (one-step JWT
+      login, automatic token refresh, get/create/update against /models/{table}),
+      verified against the com.trekglobal.idempiere.rest.api / bxservice/idempiere-rest
+      OpenAPI spec and tested against a fake server reproducing that spec exactly --
+      but not yet against a real running iDempiere instance, because that REST API
+      plugin is not part of the pinned idempiereofficial/idempiere image and is not
+      yet installed by idempiere/Dockerfile (see idempiere/README.md). Until that
+      installation is wired up, no canonical operation can actually reach a live
+      iDempiere; that remains the most consequential gap in this ADR.
 
   - id: ADR-ERP-006
     title: ERP canonical event architecture
-    status: partial
+    status: foundation
     evidence:
       - modules/events/envelope.py
-      - modules/outbox/service.py
-      - modules/inbox/service.py
+      - modules/outbox/postgres_store.py
+      - modules/inbox/postgres_store.py
+      - modules/application/server.py
+      - modules/application/dispatch_worker.py
+      - modules/integration/delivery_transport.py
       - db/migrations/0004_create_event_outbox.sql
       - db/migrations/0005_create_event_inbox.sql
       - contracts/events/
-    gap: Postgres-backed store implementations of OutboxStore/InboxStore are not written; logic is tested against in-memory fakes only.
+      - tests/integration/test_postgres_outbox_store.py
+      - tests/integration/test_postgres_inbox_store.py
+      - tests/integration/test_http_server.py
+    gap: >
+      Record -> dispatch -> signed HTTP delivery -> mark-delivered, and
+      receive -> verify -> deduplicate -> persist, are both proven end-to-end
+      against a real Postgres database and real HTTP server (not just in-memory
+      fakes). dispatch_worker.py runs to completion and exits rather than being a
+      long-running daemon; it still needs an external scheduler (cron, systemd
+      timer) wired in a real deployment, which is not yet automated in compose.yaml.
 
   - id: ADR-ERP-007
     title: ERP canonical entity and external reference mapping architecture
     status: partial
     evidence:
       - db/migrations/0003_create_entity_mapping.sql
-      - modules/mapping/
+      - modules/mapping/postgres_store.py
+      - tests/integration/test_postgres_mapping_store.py
+      - tests/integration/test_http_server.py
       - idempiere/extensions/org.nabhold.baobab.erp.mapping/
-    gap: No backing store implementation wired; fails closed by design until connected.
+      - idempiere/extensions/org.nabhold.baobab.erp.integration/
+    gap: >
+      modules/mapping resolves canonical <-> native references against a real
+      Postgres-backed store, exposed over HTTP at GET /mapping/resolve and
+      /mapping/resolve-canonical. BaobabMappingResolver (the OSGi bundle) now calls
+      those for real, tested against a real local HTTP server -- same remaining gap
+      as ADR-ERP-002: no extension point inside iDempiere invokes the registered
+      CanonicalMappingResolver service during a real request yet.
 
   - id: ADR-ERP-008
     title: ERP financial, accounting and multi-currency architecture
@@ -89,9 +141,18 @@ adrs:
     evidence:
       - modules/security/signing.py
       - modules/context/resolver.py
+      - modules/context/postgres_store.py
       - modules/identity/service.py
+      - modules/application/server.py
       - tests/tenancy/test_context_resolver.py
-    gap: No real IdP/authentication integration; ServiceIdentity is a data carrier only.
+      - tests/integration/test_http_server.py
+    gap: >
+      Fail-closed context resolution and HMAC signature verification are now proven
+      against a real database and a real HTTP round trip (valid signature accepted,
+      invalid signature rejected with 401, before the envelope is even parsed), not
+      just in-memory fakes. There is still no real IdP/authentication integration;
+      ServiceIdentity remains a data carrier only, and the HTTP layer has no
+      authentication of its own beyond the event-signing secret.
 
   - id: ADR-ERP-011
     title: ERP observability, audit, reconciliation and operational control architecture
@@ -113,13 +174,22 @@ adrs:
       - upstream.lock.yaml
       - compose.yaml
       - idempiere/Dockerfile
+      - modules/Dockerfile
       - .trivyignore
     gap: >
-      No CI image publishing, upgrade rehearsal, or release-manifest tooling yet.
-      .trivyignore documents a scoped, dated risk acceptance for HIGH/CRITICAL CVEs
-      in third-party libraries vendored inside the pinned idempiereofficial/idempiere
-      13-release image (no fixed build exists upstream as of 2026-09-06); it must be
-      re-reviewed whenever upstream.lock.yaml's iDempiere pin changes.
+      compose.yaml now builds and runs a baobab-app image (modules/) alongside
+      iDempiere, with a one-shot baobab-db-migrate service applying db/migrations
+      before it starts. modules/Dockerfile is not yet covered by the
+      foundation/vulnerability-scan workflow (that workflow currently scans only
+      idempiere/Dockerfile). No CI image publishing, upgrade rehearsal, or
+      release-manifest tooling yet. .trivyignore documents a scoped, dated risk
+      acceptance for HIGH/CRITICAL CVEs in third-party libraries vendored inside the
+      pinned idempiereofficial/idempiere 13-release image (no fixed build exists
+      upstream as of 2026-09-06); it must be re-reviewed whenever
+      upstream.lock.yaml's iDempiere pin changes. Not yet wired: installing the
+      com.trekglobal.idempiere.rest.api plugin (a Maven/Tycho build + p2 provisioning
+      step, not a jar copy) that RestIdempiereClient needs a live instance to expose
+      -- see idempiere/README.md and ADR-ERP-005.
 
   - id: ADR-ERP-014
     title: ERP master data ownership, synchronisation and reference data architecture
