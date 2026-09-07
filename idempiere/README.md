@@ -50,20 +50,25 @@ Four bundles exist today:
   `CanonicalMappingResolver` (each via a `ServiceTracker`, since OSGi doesn't guarantee
   bundle start order) and registers a plain `org.osgi.service.event.EventHandler` for
   iDempiere's own `adempiere/po/postCreate`/`adempiere/po/postUpdate` topics, filtered to
-  `C_BPartner`. These two topics are iDempiere's *asynchronous* model-change events --
-  they fire on iDempiere's own EventAdmin dispatch thread, after the triggering
-  transaction has committed -- so the resulting blocking HTTP calls to baobab-app never
-  run inside a document transaction (ADR-ERP-004, INV-ERP-EXT-011). On every such event
-  it first derives the owning tenant from the changed record's own
-  `AD_Client_ID`/`AD_Org_ID` (`ContextResolver.resolveTenant`, the reverse of
-  `context`'s usual direction), then resolves the record's canonical Party identity
+  `C_BPartner`, `M_Product`, `C_Order` and `C_Invoice` -- the near-term slice ADR-ERP-007
+  §170's own Definition-of-Done checklist names (Party, Product, PurchaseOrder/SalesOrder,
+  Supplier/CustomerInvoice); `C_Payment`, `M_InOut` and `M_Warehouse` are in that ADR's
+  full mapping matrix but not yet in its checklist, so adding them is a one-line filter
+  change whenever a real consumer needs them -- the handler itself reads "tableName"
+  generically and was never coupled to any one table. These two topics are iDempiere's
+  *asynchronous* model-change events -- they fire on iDempiere's own EventAdmin dispatch
+  thread, after the triggering transaction has committed -- so the resulting blocking
+  HTTP calls to baobab-app never run inside a document transaction (ADR-ERP-004,
+  INV-ERP-EXT-011). On every such event it first derives the owning tenant from the
+  changed record's own `AD_Client_ID`/`AD_Org_ID` (`ContextResolver.resolveTenant`, the
+  reverse of `context`'s usual direction), then resolves the record's canonical identity
   (`CanonicalMappingResolver.resolveToCanonical`). Deriving the tenant per record, rather
   than assuming one tenant for the whole process, matters because ADR-ERP-003's default
   topology (`ERP_SHARED_INSTANCE_DEDICATED_CLIENT`) has one iDempiere runtime hosting
   several `AD_Client`s (tenants) at once. This closes the ADR-ERP-007 gap that used to
   read "no extension point inside iDempiere invokes the registered
-  CanonicalMappingResolver service during a real request yet" -- for `C_BPartner`, one
-  now genuinely does, correctly, across every tenant sharing the instance. It needs no
+  CanonicalMappingResolver service during a real request yet" -- for these four tables,
+  one now genuinely does, correctly, across every tenant sharing the instance. It needs no
   iDempiere Maven artifact at compile time: iDempiere's own `AbstractEventHandler` is
   built entirely on the standard OSGi `org.osgi.service.event.EventHandler` contract
   (verified directly against `github.com/idempiere/idempiere`), which is on Maven Central

@@ -44,8 +44,8 @@ adrs:
       as ContextResolver.resolveTenant / GET /context/resolve-tenant, backed by a new
       unique index on baobab.tenant_mapping(ad_client_id, ad_org_id) WHERE
       status='active' so it's unambiguous, DOES now have a real invoking extension
-      point: the `events` bundle calls it on every real C_BPartner
-      create/update to derive the correct tenant per record (ADR-ERP-003's default
+      point: the `events` bundle calls it on every real C_BPartner/M_Product/C_Order/
+      C_Invoice create/update to derive the correct tenant per record (ADR-ERP-003's default
       topology puts several AD_Clients/tenants on one iDempiere runtime, so a single
       process-wide tenant would be wrong) -- see ADR-ERP-007's evidence below.
 
@@ -151,19 +151,23 @@ adrs:
       Postgres-backed store, exposed over HTTP at GET /mapping/resolve and
       /mapping/resolve-canonical. BaobabMappingResolver (the OSGi bundle) now calls
       those for real, tested against a real local HTTP server. The extension-point
-      gap that used to sit here is now closed for C_BPartner: the `events` bundle
-      registers a real org.osgi.service.event.EventHandler for iDempiere's own
-      asynchronous adempiere/po/postCreate/postUpdate topics, filtered to
-      C_BPartner. On every such event it first derives the owning tenant from the
-      changed record's own AD_Client_ID/AD_Org_ID via ContextResolver.resolveTenant
-      (see ADR-ERP-002's evidence), then calls
+      gap that used to sit here is now closed for section 170's near-term slice
+      (Party/Product/PurchaseOrder-SalesOrder/Supplier-CustomerInvoice, per that
+      section's own Definition-of-Done checklist): the `events` bundle registers a
+      real org.osgi.service.event.EventHandler for iDempiere's own asynchronous
+      adempiere/po/postCreate/postUpdate topics, filtered to C_BPartner, M_Product,
+      C_Order and C_Invoice. On every such event it first derives the owning tenant
+      from the changed record's own AD_Client_ID/AD_Org_ID via
+      ContextResolver.resolveTenant (see ADR-ERP-002's evidence), then calls
       CanonicalMappingResolver.resolveToCanonical for that tenant -- a real
       iDempiere request now invokes both registered services, correctly, even when
       one iDempiere instance hosts several tenants at once (ADR-ERP-003's default
       topology), which an earlier version of this bundle got wrong (a single
       process-wide tenant system property, caught in review before merge). What's
-      still open: only C_BPartner is wired, not the rest of ADR-ERP-007's initial
-      mapping matrix (M_Product, C_Order, C_Invoice, ...).
+      still open: C_Payment, M_InOut and M_Warehouse are in section 170's full
+      mapping matrix but not yet in its checklist or wired here -- adding one is a
+      one-line filter change in EventsActivator, not new code, since the handler
+      reads "tableName" generically.
 
   - id: ADR-ERP-008
     title: ERP financial, accounting and multi-currency architecture

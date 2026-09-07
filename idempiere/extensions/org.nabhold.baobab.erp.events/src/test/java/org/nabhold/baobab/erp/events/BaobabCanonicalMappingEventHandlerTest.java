@@ -28,10 +28,30 @@ class BaobabCanonicalMappingEventHandlerTest {
     private static final String CANONICAL_ID = "e4a8ccd4-21cb-43b7-915f-1434d9aef07a";
 
     private static Event bPartnerEvent(Object po) {
+        return nativeEvent("C_BPartner", po);
+    }
+
+    private static Event nativeEvent(String tableName, Object po) {
         Map<String, Object> properties = new HashMap<>();
-        properties.put("tableName", "C_BPartner");
+        properties.put("tableName", tableName);
         properties.put("event.data", po);
         return new Event(TOPIC, properties);
+    }
+
+    @Test
+    void resolvesOtherMappedTablesTheSameWay() {
+        // EventsActivator filters topics to C_BPartner/M_Product/C_Order/C_Invoice
+        // (ADR-ERP-007 §170's near-term slice); the handler itself reads "tableName"
+        // generically and must not be coupled to any one of them.
+        RecordingContextResolver contextResolver = RecordingContextResolver.returning("nabhold", "nabhold-legal");
+        RecordingMappingResolver mappingResolver = RecordingMappingResolver.returning(CANONICAL_ID);
+        BaobabCanonicalMappingEventHandler handler =
+                new BaobabCanonicalMappingEventHandler(contextResolver, mappingResolver);
+
+        handler.handleEvent(nativeEvent("M_Product", new FakeNativePO(555, 1000, 1)));
+
+        assertEquals("M_Product", mappingResolver.table);
+        assertEquals(555, mappingResolver.recordId);
     }
 
     @Test

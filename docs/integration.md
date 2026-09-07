@@ -58,12 +58,14 @@ sides of the process boundary: only `modules/`, via baobab-app.
 The `events` bundle is the other direction: a real iDempiere-fired event, not a
 Baobab-initiated call. It registers a plain `org.osgi.service.event.EventHandler` for
 iDempiere's own `adempiere/po/postCreate`/`adempiere/po/postUpdate` topics (filtered to
-`C_BPartner`), which fire asynchronously, after the record's own transaction has
+`C_BPartner`, `M_Product`, `C_Order` and `C_Invoice` -- ADR-ERP-007 §170's near-term
+mapping-matrix slice; `C_Payment`, `M_InOut` and `M_Warehouse` are in that matrix too,
+just not wired yet), which fire asynchronously, after the record's own transaction has
 committed. When one fires, it first calls the registered `ContextResolver` service
 (from `context`) to turn the changed record's own `AD_Client_ID`/`AD_Org_ID` into a
 tenant -- `GET /context/resolve-tenant`, the reverse of `context`'s usual direction --
 then calls the registered `CanonicalMappingResolver` service (from `mapping`) to resolve
-the record's canonical Party identity for that tenant -- `GET /mapping/resolve-canonical`,
+the record's canonical identity for that tenant -- `GET /mapping/resolve-canonical`,
 the same call `mapping` already makes, just triggered by iDempiere itself instead of a
 test. Resolving the tenant per event, rather than assuming one tenant for the whole
 process, is required by ADR-ERP-003's default deployment topology

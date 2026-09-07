@@ -16,10 +16,12 @@
   <description>
     Subscribes to iDempiere's own OSGi EventAdmin model-change events (the standard
     org.osgi.service.event.EventHandler contract iDempiere's AbstractEventHandler is
-    built on) and, on a real C_BPartner create/update, derives the owning tenant from
-    the changed record's own AD_Client_ID/AD_Org_ID via the registered ContextResolver
-    service, then calls CanonicalMappingResolver to resolve its canonical Party identity
-    (ADR-ERP-007). Deriving the tenant per record (rather than assuming one tenant per
+    built on) and, on a real C_BPartner/M_Product/C_Order/C_Invoice create/update
+    (ADR-ERP-007 section 170's near-term mapping-matrix slice), derives the owning
+    tenant from the changed record's own AD_Client_ID/AD_Org_ID via the registered
+    ContextResolver service, then calls CanonicalMappingResolver to resolve its
+    canonical identity (ADR-ERP-007). Deriving the tenant per record (rather than
+    assuming one tenant per
     process) matters because ADR-ERP-003's default topology
     (ERP_SHARED_INSTANCE_DEDICATED_CLIENT) has one iDempiere runtime hosting several
     AD_Clients at once. Hooks the asynchronous PO_POST_CREATE/PO_POST_UPADTE topics
