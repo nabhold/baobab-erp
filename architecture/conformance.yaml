@@ -205,7 +205,25 @@ adrs:
     status: partial
     evidence:
       - modules/reconciliation/record_counts.py
-    gap: Only Layer 1 (record counts) reconciliation exists; Layers 2-4 and audit/observability tooling are not started.
+      - modules/reconciliation/identity.py
+      - modules/mapping/postgres_store.py
+      - tests/unit/test_record_counts.py
+      - tests/unit/test_identity_reconciliation.py
+      - tests/integration/test_postgres_mapping_store.py
+      - docs/reconciliation.md
+    gap: >
+      Two of section 63's reconciliation dimensions exist: count (section 68,
+      pre-existing) and identity (section 64, new) -- do the canonical entities
+      Baobab expects to have an active iDempiere mapping actually have one, and
+      are there active mappings for entities no longer expected. Both are pure
+      functions over injected stores, tested with in-memory fakes and against
+      real Postgres rows (PostgresCanonicalMappingStore.active_canonical_ids).
+      Neither is wired to a scheduler or exposed over HTTP -- there is no
+      periodic job that calls them and no endpoint to trigger or report a run,
+      unlike dispatch_worker.py's Compose-scheduled loop. State (section 65),
+      quantity (section 66) and amount (section 67) reconciliation are not
+      started, and audit/observability tooling generally (tracing, the
+      erp_reconciliation_* metrics section 383/385 name) has not begun.
 
   - id: ADR-ERP-012
     title: ERP high availability, backup, disaster recovery and business continuity architecture

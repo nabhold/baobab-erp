@@ -4,6 +4,7 @@ import uuid
 from mapping.model import MappingNotFoundError, NativeRecordRef
 from mapping.postgres_store import PostgresCanonicalMappingStore
 from mapping.resolver import resolve_to_canonical, resolve_to_native
+from reconciliation.identity import reconcile_identity
 
 from _postgres import connect
 
@@ -21,7 +22,7 @@ class PostgresMappingStoreTests(unittest.TestCase):
         self.connection.commit()
         self.connection.close()
 
-    def _insert_mapping(self):
+    def _insert_mapping(self, canonical_id=None, native_id=1001, canonical_type="Party"):
         with self.connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -29,7 +30,7 @@ class PostgresMappingStoreTests(unittest.TestCase):
                     (tenant_id, canonical_type, canonical_id, native_table, native_id)
                 VALUES (%s, %s, %s::uuid, %s, %s)
                 """,
-                (self.tenant_id, "Party", self.canonical_id, "C_BPartner", 1001),
+                (self.tenant_id, canonical_type, canonical_id or self.canonical_id, "C_BPartner", native_id),
             )
         self.connection.commit()
 
@@ -49,6 +50,28 @@ class PostgresMappingStoreTests(unittest.TestCase):
         store = PostgresCanonicalMappingStore(self.connection)
         with self.assertRaises(MappingNotFoundError):
             resolve_to_native(self.tenant_id, "Party", str(uuid.uuid4()), store)
+
+    def test_identity_reconciliation_against_real_rows(self):
+        missing_canonical_id = str(uuid.uuid4())
+        self._insert_mapping()
+        store = PostgresCanonicalMappingStore(self.connection)
+
+        result = reconcile_identity(
+            self.tenant_id, "Party", {self.canonical_id, missing_canonical_id}, store
+        )
+
+        self.assertFalse(result.matches)
+        self.assertEqual(result.missing, frozenset({missing_canonical_id}))
+        self.assertEqual(result.unexpected, frozenset())
+
+    def test_identity_reconciliation_flags_unexpected_mapping(self):
+        self._insert_mapping()
+        store = PostgresCanonicalMappingStore(self.connection)
+
+        result = reconcile_identity(self.tenant_id, "Party", set(), store)
+
+        self.assertFalse(result.matches)
+        self.assertEqual(result.unexpected, frozenset({self.canonical_id}))
 
 
 if __name__ == "__main__":
