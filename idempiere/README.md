@@ -34,7 +34,7 @@ org.nabhold.baobab.erp.security
 org.nabhold.baobab.erp.provisioning
 ```
 
-Three bundles exist today:
+Four bundles exist today:
 
 - `context` and `mapping`: an `Activator` registering an OSGi service, a narrow
   interface expressing the ADR's contract, and a real implementation that calls
@@ -45,16 +45,36 @@ Three bundles exist today:
   baobab-app over HTTP and parse its (small, flat) JSON responses -- everything inside
   iDempiere's JVM that needs the `baobab` Postgres schema goes through this, since it
   has no direct database access of its own.
+- `events`: the first bundle that *consumes* another bundle's OSGi service rather than
+  just sharing a library -- it tracks `mapping`'s `CanonicalMappingResolver` (via a
+  `ServiceTracker`, since OSGi doesn't guarantee bundle start order) and registers a
+  plain `org.osgi.service.event.EventHandler` for iDempiere's own
+  `adempiere/po/postCreate`/`adempiere/po/postUpdate` topics, filtered to `C_BPartner`.
+  These two topics are iDempiere's *asynchronous* model-change events -- they fire on
+  iDempiere's own EventAdmin dispatch thread, after the triggering transaction has
+  committed -- so the resulting blocking HTTP call to baobab-app never runs inside a
+  document transaction (ADR-ERP-004, INV-ERP-EXT-011). This closes the ADR-ERP-007 gap
+  that used to read "no extension point inside iDempiere invokes the registered
+  CanonicalMappingResolver service during a real request yet" -- for `C_BPartner`, one
+  now genuinely does. It needs no iDempiere Maven artifact at compile time: iDempiere's
+  own `AbstractEventHandler` is built entirely on the standard OSGi
+  `org.osgi.service.event.EventHandler` contract (verified directly against
+  `github.com/idempiere/idempiere`), which is on Maven Central under the same `org.osgi`
+  groupId as `org.osgi.core`. The only iDempiere-shaped value this bundle touches -- a
+  changed record's numeric id -- is read via one reflective call to the PO object's
+  `get_ID()` method, since `org.compiere.model.PO` itself isn't on the compile classpath.
 
 The remaining namespaces are reserved and unimplemented; do not create empty placeholder
 bundles for them before there is a real extension point to fill.
 
 Both resolvers read baobab-app's base URL from the `baobab.app.base.url` system
 property, defaulting to `http://baobab-app:8000` (the Compose service name/port from
-`compose.yaml`, so the default already works for that topology unmodified). Overriding
-it in a different deployment means passing `-Dbaobab.app.base.url=...` to iDempiere's
-own JVM launch, which isn't wired up here yet -- it depends on the pinned base image's
-own entrypoint/launcher mechanism.
+`compose.yaml`, so the default already works for that topology unmodified). `events`
+reads the tenant this iDempiere instance serves from a new `baobab.tenant.id` system
+property (no default; the bundle logs a warning and does nothing until it's set).
+Overriding either in a real deployment means passing `-Dbaobab.app.base.url=...
+-Dbaobab.tenant.id=...` to iDempiere's own JVM launch, which isn't wired up here yet --
+it depends on the pinned base image's own entrypoint/launcher mechanism.
 
 ## Building
 
@@ -67,14 +87,18 @@ Each module produces a manifest-complete OSGi bundle jar under `target/`. `Docke
 builds these itself (a `maven:3.9-eclipse-temurin-17` stage) and copies the jars straight
 into the pinned image's plugins directory (`/opt/idempiere/plugins`) — `docker build -f
 idempiere/Dockerfile .` is self-contained, no separate `mvn package` step required first.
-A p2/feature repository (`features/`) is unnecessary at three bundles; see that
+A p2/feature repository (`features/`) is unnecessary at four bundles; see that
 directory's README for when it would be worth adding.
 
-`mvn test` (or `mvn package`, which runs tests first) exercises each bundle's HTTP
-calls to baobab-app against a real local server (`com.sun.net.httpserver.HttpServer`,
-part of the JDK, no extra test dependency) reproducing baobab-app's actual response
-shapes -- not mocked. `idempiere/Dockerfile`'s build stage passes `-DskipTests` since
-CI's `build-extensions` job already runs them separately for faster feedback.
+`mvn test` (or `mvn package`, which runs tests first) exercises `context`'s and
+`mapping`'s HTTP calls to baobab-app against a real local server
+(`com.sun.net.httpserver.HttpServer`, part of the JDK, no extra test dependency)
+reproducing baobab-app's actual response shapes -- not mocked. `events`' tests build a
+real `org.osgi.service.event.Event` (also not mocked) against a small recording
+`CanonicalMappingResolver` double, since its own job is proving it extracts the right
+tenant/table/record id from a real event, not re-proving `mapping`'s already-tested HTTP
+wire format. `idempiere/Dockerfile`'s build stage passes `-DskipTests` since CI's
+`build-extensions` job already runs them separately for faster feedback.
 
 ## Third-party plugins are not automatic
 
@@ -92,5 +116,8 @@ tested. Tracked in `architecture/conformance.yaml` against ADR-ERP-005 and ADR-E
 
 ## Runtime dependency
 
-iDempiere 13 "Orion" LTS targets Java 17 and PostgreSQL. All three extension modules
+iDempiere 13 "Orion" LTS targets Java 17 and PostgreSQL. All four extension modules
 compile against Java 17 and OSGi Core R6, matching iDempiere's own Equinox runtime.
+`events` additionally compiles against the standard OSGi compendium APIs
+`org.osgi.service.event` and `org.osgi.util.tracker` (both on Maven Central, both
+provided by iDempiere's own Equinox runtime, so neither is bundled into our jar).

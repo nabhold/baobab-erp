@@ -1,0 +1,75 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.nabhold.baobab.erp</groupId>
+    <artifactId>baobab-erp-extensions</artifactId>
+    <version>0.1.0</version>
+  </parent>
+
+  <artifactId>org.nabhold.baobab.erp.events</artifactId>
+  <packaging>jar</packaging>
+
+  <name>Baobab ERP Events Bundle</name>
+  <description>
+    Subscribes to iDempiere's own OSGi EventAdmin model-change events (the standard
+    org.osgi.service.event.EventHandler contract iDempiere's AbstractEventHandler is
+    built on) and, on a real C_BPartner create/update, calls the registered
+    CanonicalMappingResolver service to resolve its canonical Party identity
+    (ADR-ERP-007). Hooks the asynchronous PO_POST_CREATE/PO_POST_UPADTE topics
+    specifically because they fire after the triggering transaction has committed,
+    so the resulting blocking HTTP call to baobab-app never runs inside a document
+    transaction (ADR-ERP-004, INV-ERP-EXT-011).
+  </description>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.osgi</groupId>
+      <artifactId>org.osgi.core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.osgi</groupId>
+      <artifactId>org.osgi.service.event</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.osgi</groupId>
+      <artifactId>org.osgi.util.tracker</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.nabhold.baobab.erp</groupId>
+      <artifactId>org.nabhold.baobab.erp.mapping</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>biz.aQute.bnd</groupId>
+        <artifactId>bnd-maven-plugin</artifactId>
+        <configuration>
+          <bnd><![CDATA[
+Bundle-SymbolicName: org.nabhold.baobab.erp.events
+Bundle-Activator: org.nabhold.baobab.erp.events.EventsActivator
+Bundle-Vendor: Nabhold Group Africa
+Import-Package: org.nabhold.baobab.erp.mapping;version="[0.1,1)",*
+]]></bnd>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>

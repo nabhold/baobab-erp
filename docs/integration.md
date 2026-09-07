@@ -55,6 +55,17 @@ each depend on it rather than duplicating HTTP/JSON handling. This keeps "who to
 the `baobab` schema" answered the same way from both sides of the process boundary:
 only `modules/`, via baobab-app.
 
+The `events` bundle is the other direction: a real iDempiere-fired event, not a
+Baobab-initiated call. It registers a plain `org.osgi.service.event.EventHandler` for
+iDempiere's own `adempiere/po/postCreate`/`adempiere/po/postUpdate` topics (filtered to
+`C_BPartner`), which fire asynchronously, after the record's own transaction has
+committed. When one fires, it calls the registered `CanonicalMappingResolver` service
+(from `mapping`, looked up via a `ServiceTracker`) to resolve the changed record's
+canonical Party identity -- the same `GET /mapping/resolve-canonical` call `mapping`
+already makes, just triggered by iDempiere itself instead of a test. The tenant this
+iDempiere instance serves comes from a `baobab.tenant.id` system property (see
+`idempiere/README.md`); the bundle logs and does nothing if it isn't set.
+
 ## Status
 
 The HTTP layer (including `/context/resolve` and `/mapping/resolve*`), outbox/inbox,
