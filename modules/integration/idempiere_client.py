@@ -11,11 +11,13 @@ than assumed: login shape, token header, list/get/create/update paths and respon
 envelopes below are all taken directly from that spec.
 
 Deployment note: this plugin is NOT part of the pinned idempiereofficial/idempiere
-image (see idempiere/Dockerfile) -- it is a separate OSGi bundle installed into a
-running instance through iDempiere's p2 provisioning mechanism
-(`update-rest-extensions.sh` in that project). Wiring that installation into this
-repository's runtime is a distinct, not-yet-done piece of work; see
-architecture/conformance.yaml against ADR-ERP-005 and ADR-ERP-013.
+image -- it is a separate OSGi bundle installed into a running instance through
+iDempiere's p2 provisioning mechanism. idempiere/Dockerfile now does that installation
+for real (a verified update-prd.sh invocation), gated on a pre-built p2 repository
+being present at idempiere/vendor/rest-api-p2/ (empty by default -- producing that
+repository needs network access this environment doesn't have); see
+idempiere/rest-api/README.md and architecture/conformance.yaml against ADR-ERP-005
+and ADR-ERP-013.
 
 Field-name note: the spec's own examples are inconsistent about casing for simple
 scalar columns (`name` in some POST/PUT bodies, `Name` in every $filter/$select

@@ -85,6 +85,11 @@ implementation, tested the same way against a fake server reproducing the
 `bxservice/idempiere-rest` spec -- but not yet against a real running iDempiere
 instance, because that REST API plugin **is not part of the pinned
 `idempiereofficial/idempiere` image**. It's a separate OSGi bundle that has to be built
-(Maven/Tycho) and installed into a running instance through iDempiere's p2 provisioning
-tooling; `idempiere/Dockerfile` does not do this yet. See `idempiere/README.md` and
+(Maven/Tycho) into a p2 repository and installed into a running instance through
+iDempiere's p2 provisioning tooling. `idempiere/Dockerfile` now does the installation
+half of that (a real, verified `update-prd.sh` invocation, gated on a p2 repository
+being present at `idempiere/vendor/rest-api-p2/`); the build-the-p2-repository half
+still isn't done, since it needs network access this environment doesn't have -- see
+`idempiere/rest-api/README.md` for exactly what's confirmed working, what's still
+missing, and how to supply one. See also `idempiere/README.md` and
 `architecture/conformance.yaml` against ADR-ERP-005 and ADR-ERP-013.

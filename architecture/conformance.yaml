@@ -88,17 +88,27 @@ adrs:
       - modules/application/server.py
       - tests/unit/test_idempiere_client.py
       - tests/integration/test_http_server.py
+      - idempiere/Dockerfile
+      - idempiere/rest-api/README.md
+      - idempiere/vendor/rest-api-p2/
     gap: >
       The inbound HTTP server exists and is tested end-to-end (health checks, signed
       webhook receipt). RestIdempiereClient is now a real implementation (one-step JWT
       login, automatic token refresh, get/create/update against /models/{table}),
       verified against the com.trekglobal.idempiere.rest.api / bxservice/idempiere-rest
       OpenAPI spec and tested against a fake server reproducing that spec exactly --
-      but not yet against a real running iDempiere instance, because that REST API
-      plugin is not part of the pinned idempiereofficial/idempiere image and is not
-      yet installed by idempiere/Dockerfile (see idempiere/README.md). Until that
-      installation is wired up, no canonical operation can actually reach a live
-      iDempiere; that remains the most consequential gap in this ADR.
+      but not yet against a real running iDempiere instance. idempiere/Dockerfile now
+      has a real, verified install step (iDempiere's own update-prd.sh, confirmed
+      present in the pinned image by downloading and inspecting the actual release
+      archive, not assumed) gated on a p2 repository being present at
+      idempiere/vendor/rest-api-p2/ -- but that directory is empty by default, because
+      producing com.trekglobal.idempiere.rest.api's p2 repository needs a Tycho build
+      against a p2 repository of iDempiere's own core, which needs network access
+      (a p2 mirror, or a full source build of iDempiere core) this environment doesn't
+      have; see idempiere/rest-api/README.md for exactly what was checked and what
+      remains. Until someone supplies that repository, no canonical operation can
+      actually reach a live iDempiere; that remains the most consequential gap in this
+      ADR, though the installation half of it is no longer unverified guesswork.
 
   - id: ADR-ERP-006
     title: ERP canonical event architecture
@@ -250,10 +260,13 @@ adrs:
       acceptance for HIGH/CRITICAL CVEs in third-party libraries vendored inside the
       pinned idempiereofficial/idempiere 13-release image (no fixed build exists
       upstream as of 2026-09-06); it must be re-reviewed whenever
-      upstream.lock.yaml's iDempiere pin changes. Not yet wired: installing the
-      com.trekglobal.idempiere.rest.api plugin (a Maven/Tycho build + p2 provisioning
-      step, not a jar copy) that RestIdempiereClient needs a live instance to expose
-      -- see idempiere/README.md and ADR-ERP-005.
+      upstream.lock.yaml's iDempiere pin changes. Installing the
+      com.trekglobal.idempiere.rest.api plugin that RestIdempiereClient needs a live
+      instance to expose is a p2 provisioning step, not a jar copy, and idempiere/Dockerfile
+      now does that provisioning step for real (gated on idempiere/vendor/rest-api-p2/,
+      empty by default) -- what's still missing is the Maven/Tycho build that would
+      populate that directory, which needs network access this environment doesn't
+      have -- see idempiere/README.md, idempiere/rest-api/README.md and ADR-ERP-005.
 
   - id: ADR-ERP-014
     title: ERP master data ownership, synchronisation and reference data architecture
