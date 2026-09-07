@@ -46,3 +46,21 @@ class PostgresCanonicalMappingStore:
             )
             row = cursor.fetchone()
         return row[0] if row else None
+
+    def active_canonical_ids(self, tenant_id: str, canonical_type: str) -> set[str]:
+        """Backs identity reconciliation (ADR-ERP-011 section 64): every canonical id
+        this tenant currently has an active native mapping for, regardless of which
+        native record it points at.
+        """
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT canonical_id::text
+                FROM baobab.entity_mapping
+                WHERE tenant_id = %s
+                  AND canonical_type = %s
+                  AND status = 'active'
+                """,
+                (tenant_id, canonical_type),
+            )
+            return {row[0] for row in cursor.fetchall()}

@@ -1,7 +1,7 @@
 import unittest
 
 from context.model import ContextResolutionError, TenantContext
-from context.resolver import resolve_context
+from context.resolver import resolve_context, resolve_tenant
 
 
 class FakeMappingStore:
@@ -10,6 +10,12 @@ class FakeMappingStore:
 
     def find_active_mapping(self, tenant_id, entity_id):
         return self._mappings.get((tenant_id, entity_id))
+
+    def find_by_native(self, ad_client_id, ad_org_id):
+        for (tenant_id, entity_id), (mapped_client_id, mapped_org_id) in self._mappings.items():
+            if (mapped_client_id, mapped_org_id) == (ad_client_id, ad_org_id):
+                return (tenant_id, entity_id)
+        return None
 
 
 class ContextResolverTests(unittest.TestCase):
@@ -36,6 +42,14 @@ class ContextResolverTests(unittest.TestCase):
         """NABHOLD -> THAMANI must never resolve: distinct tenants stay isolated."""
         with self.assertRaises(ContextResolutionError):
             resolve_context("thamani", "nabhold-legal", self.store)
+
+    def test_resolves_tenant_from_native_ids(self):
+        context = resolve_tenant(1000, 1, self.store)
+        self.assertEqual(context, TenantContext("nabhold", "nabhold-legal", 1000, 1))
+
+    def test_unmapped_native_ids_fail_closed(self):
+        with self.assertRaises(ContextResolutionError):
+            resolve_tenant(9999, 9, self.store)
 
 
 if __name__ == "__main__":

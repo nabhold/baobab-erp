@@ -7,7 +7,7 @@
 #   partial    - some of the decision is implemented and tested; a material gap remains
 #   planned    - decided in the ADR, not yet implemented
 schema_version: "1.0"
-updated: "2026-09-06"
+updated: "2026-09-07"
 adrs:
   - id: ADR-ERP-001
     title: iDempiere as an isolated, headless, multi-tenant Baobab ERP engine
@@ -23,21 +23,31 @@ adrs:
     status: partial
     evidence:
       - db/migrations/0002_create_tenant_mapping.sql
+      - db/migrations/0006_add_tenant_mapping_native_unique_index.sql
       - modules/context/postgres_store.py
       - modules/application/server.py
       - tests/integration/test_postgres_context_store.py
       - tests/integration/test_http_server.py
+      - tests/tenancy/test_context_resolver.py
       - idempiere/extensions/org.nabhold.baobab.erp.context/
       - idempiere/extensions/org.nabhold.baobab.erp.integration/
+      - idempiere/extensions/org.nabhold.baobab.erp.events/
     gap: >
       modules/context resolves against a real Postgres-backed store, exposed over
       HTTP at GET /context/resolve. BaobabContextResolver (the OSGi bundle running
       inside iDempiere) now calls that endpoint for real -- tested against a real
       local HTTP server reproducing the exact response shape -- instead of always
-      failing closed. What's still missing: no extension point inside iDempiere
-      (event handler, model validator) actually invokes the registered
-      ContextResolver OSGi service during a real request yet, so the loop is
-      real end-to-end in tests but not yet exercised by iDempiere itself.
+      failing closed. The forward direction (tenant -> AD_Client/AD_Org) still has
+      no invoking extension point inside iDempiere: it's driven by inbound requests,
+      which still depends on the deferred REST API plugin (ADR-ERP-005/ADR-ERP-013).
+      The reverse direction (AD_Client/AD_Org -> tenant), added alongside this note
+      as ContextResolver.resolveTenant / GET /context/resolve-tenant, backed by a new
+      unique index on baobab.tenant_mapping(ad_client_id, ad_org_id) WHERE
+      status='active' so it's unambiguous, DOES now have a real invoking extension
+      point: the `events` bundle calls it on every real C_BPartner/M_Product/C_Order/
+      C_Invoice create/update to derive the correct tenant per record (ADR-ERP-003's default
+      topology puts several AD_Clients/tenants on one iDempiere runtime, so a single
+      process-wide tenant would be wrong) -- see ADR-ERP-007's evidence below.
 
   - id: ADR-ERP-003
     title: ERP EngineInstance isolation, regional deployment and data residency
@@ -52,13 +62,22 @@ adrs:
       - idempiere/extensions/org.nabhold.baobab.erp.context/
       - idempiere/extensions/org.nabhold.baobab.erp.mapping/
       - idempiere/extensions/org.nabhold.baobab.erp.integration/
+      - idempiere/extensions/org.nabhold.baobab.erp.events/
       - idempiere/patches/README.md
     gap: >
-      3 of the 8 reserved namespaces have a bundle; the rest are unimplemented by
+      4 of the 8 reserved namespaces have a bundle; the rest are unimplemented by
       design until there is a real extension point to fill. `integration` is a
       library bundle (no Activator, no published OSGi service) that `context` and
       `mapping` both depend on for reaching baobab-app over HTTP -- a real,
       inter-bundle OSGi dependency (Import/Export-Package), not just shared source.
+      `events` goes further: it's the first bundle that consumes other bundles'
+      OSGi *services* (context's ContextResolver and mapping's
+      CanonicalMappingResolver, each via a ServiceTracker) rather than just sharing
+      a library, and it registers a plain org.osgi.service.event.EventHandler for
+      iDempiere's own asynchronous adempiere/po/postCreate and postUpdate topics --
+      a real, working example of the "event handler" extension mechanism named
+      throughout this ADR, requiring no iDempiere Maven artifact at compile time
+      (see idempiere/README.md).
 
   - id: ADR-ERP-005
     title: Baobab ERP integration API architecture
@@ -90,10 +109,12 @@ adrs:
       - modules/inbox/postgres_store.py
       - modules/application/server.py
       - modules/application/dispatch_worker.py
+      - modules/scripts/dispatch_worker_loop.sh
       - modules/integration/delivery_transport.py
       - db/migrations/0004_create_event_outbox.sql
       - db/migrations/0005_create_event_inbox.sql
       - contracts/events/
+      - compose.yaml
       - tests/integration/test_postgres_outbox_store.py
       - tests/integration/test_postgres_inbox_store.py
       - tests/integration/test_http_server.py
@@ -101,9 +122,18 @@ adrs:
       Record -> dispatch -> signed HTTP delivery -> mark-delivered, and
       receive -> verify -> deduplicate -> persist, are both proven end-to-end
       against a real Postgres database and real HTTP server (not just in-memory
-      fakes). dispatch_worker.py runs to completion and exits rather than being a
-      long-running daemon; it still needs an external scheduler (cron, systemd
-      timer) wired in a real deployment, which is not yet automated in compose.yaml.
+      fakes). dispatch_worker.py still runs to completion and exits by design
+      rather than being a long-running daemon, but that gap is now closed: the
+      baobab-dispatch-worker Compose service invokes it periodically via
+      modules/scripts/dispatch_worker_loop.sh (a plain, configurable sleep loop --
+      scheduling policy as deployment configuration, matching the worker's own
+      design intent, not a change to the worker itself). What's still open: the
+      loop is a shell sleep loop, not a real scheduler daemon (cron, a systemd
+      timer) -- fine for the single-host Compose topology this repository
+      supports today, but worth revisiting if/when ADR-ERP-013 moves past it; and
+      there's no retry/backoff between ticks beyond dispatch_worker.py's own
+      per-event backoff, so a failed tick just waits for the next fixed-interval
+      attempt.
 
   - id: ADR-ERP-007
     title: ERP canonical entity and external reference mapping architecture
@@ -115,13 +145,29 @@ adrs:
       - tests/integration/test_http_server.py
       - idempiere/extensions/org.nabhold.baobab.erp.mapping/
       - idempiere/extensions/org.nabhold.baobab.erp.integration/
+      - idempiere/extensions/org.nabhold.baobab.erp.events/
     gap: >
       modules/mapping resolves canonical <-> native references against a real
       Postgres-backed store, exposed over HTTP at GET /mapping/resolve and
       /mapping/resolve-canonical. BaobabMappingResolver (the OSGi bundle) now calls
-      those for real, tested against a real local HTTP server -- same remaining gap
-      as ADR-ERP-002: no extension point inside iDempiere invokes the registered
-      CanonicalMappingResolver service during a real request yet.
+      those for real, tested against a real local HTTP server. The extension-point
+      gap that used to sit here is now closed for section 170's near-term slice
+      (Party/Product/PurchaseOrder-SalesOrder/Supplier-CustomerInvoice, per that
+      section's own Definition-of-Done checklist): the `events` bundle registers a
+      real org.osgi.service.event.EventHandler for iDempiere's own asynchronous
+      adempiere/po/postCreate/postUpdate topics, filtered to C_BPartner, M_Product,
+      C_Order and C_Invoice. On every such event it first derives the owning tenant
+      from the changed record's own AD_Client_ID/AD_Org_ID via
+      ContextResolver.resolveTenant (see ADR-ERP-002's evidence), then calls
+      CanonicalMappingResolver.resolveToCanonical for that tenant -- a real
+      iDempiere request now invokes both registered services, correctly, even when
+      one iDempiere instance hosts several tenants at once (ADR-ERP-003's default
+      topology), which an earlier version of this bundle got wrong (a single
+      process-wide tenant system property, caught in review before merge). What's
+      still open: C_Payment, M_InOut and M_Warehouse are in section 170's full
+      mapping matrix but not yet in its checklist or wired here -- adding one is a
+      one-line filter change in EventsActivator, not new code, since the handler
+      reads "tableName" generically.
 
   - id: ADR-ERP-008
     title: ERP financial, accounting and multi-currency architecture
@@ -159,7 +205,25 @@ adrs:
     status: partial
     evidence:
       - modules/reconciliation/record_counts.py
-    gap: Only Layer 1 (record counts) reconciliation exists; Layers 2-4 and audit/observability tooling are not started.
+      - modules/reconciliation/identity.py
+      - modules/mapping/postgres_store.py
+      - tests/unit/test_record_counts.py
+      - tests/unit/test_identity_reconciliation.py
+      - tests/integration/test_postgres_mapping_store.py
+      - docs/reconciliation.md
+    gap: >
+      Two of section 63's reconciliation dimensions exist: count (section 68,
+      pre-existing) and identity (section 64, new) -- do the canonical entities
+      Baobab expects to have an active iDempiere mapping actually have one, and
+      are there active mappings for entities no longer expected. Both are pure
+      functions over injected stores, tested with in-memory fakes and against
+      real Postgres rows (PostgresCanonicalMappingStore.active_canonical_ids).
+      Neither is wired to a scheduler or exposed over HTTP -- there is no
+      periodic job that calls them and no endpoint to trigger or report a run,
+      unlike dispatch_worker.py's Compose-scheduled loop. State (section 65),
+      quantity (section 66) and amount (section 67) reconciliation are not
+      started, and audit/observability tooling generally (tracing, the
+      erp_reconciliation_* metrics section 383/385 name) has not begun.
 
   - id: ADR-ERP-012
     title: ERP high availability, backup, disaster recovery and business continuity architecture

@@ -41,6 +41,7 @@ jobs:
           DB_PASS: validation
           DB_ADMIN_PASS: validation
           BAOBAB_EVENT_SIGNING_SECRET: validation
+          BAOBAB_WEBHOOK_URL: https://validation.example.com/baobab/events
         run: docker compose -f compose.yaml config --quiet
 
   build-extensions:

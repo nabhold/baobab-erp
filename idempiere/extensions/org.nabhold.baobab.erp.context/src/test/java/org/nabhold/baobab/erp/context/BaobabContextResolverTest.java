@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.nabhold.baobab.erp.context.ContextResolver.ContextResolutionException;
 import org.nabhold.baobab.erp.context.ContextResolver.ResolvedContext;
+import org.nabhold.baobab.erp.context.ContextResolver.TenantIdentity;
 import org.nabhold.baobab.erp.integration.BaobabAppClient;
 
 /**
@@ -32,6 +33,14 @@ class BaobabContextResolverTest {
             String query = exchange.getRequestURI().getQuery();
             if (query != null && query.contains("tenant_id=nabhold") && query.contains("entity_id=nabhold-legal")) {
                 respond(exchange, 200, "{\"ad_client_id\": 1000, \"ad_org_id\": 1}");
+            } else {
+                respond(exchange, 404, "{\"error\": \"No active mapping\"}");
+            }
+        });
+        server.createContext("/context/resolve-tenant", exchange -> {
+            String query = exchange.getRequestURI().getQuery();
+            if (query != null && query.contains("ad_client_id=1000") && query.contains("ad_org_id=1")) {
+                respond(exchange, 200, "{\"tenant_id\": \"nabhold\", \"entity_id\": \"nabhold-legal\"}");
             } else {
                 respond(exchange, 404, "{\"error\": \"No active mapping\"}");
             }
@@ -84,5 +93,16 @@ class BaobabContextResolverTest {
         ContextResolutionException exception =
                 assertThrows(ContextResolutionException.class, () -> unreachable.resolve("nabhold", "nabhold-legal"));
         assertTrue(exception.getMessage().contains("Could not resolve context"));
+    }
+
+    @Test
+    void resolvesRealTenantOverHttp() throws Exception {
+        TenantIdentity identity = resolver.resolveTenant(1000, 1);
+        assertEquals(new TenantIdentity("nabhold", "nabhold-legal"), identity);
+    }
+
+    @Test
+    void unmappedNativeIdsFailClosed() {
+        assertThrows(ContextResolutionException.class, () -> resolver.resolveTenant(999999, 999));
     }
 }

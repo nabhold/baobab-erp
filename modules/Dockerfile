@@ -12,6 +12,7 @@ WORKDIR /app
 COPY modules/ /app/
 COPY db/ /db/
 RUN pip install --no-cache-dir -e . \
+    && chmod +x /app/scripts/dispatch_worker_loop.sh \
     && chown -R baobab:baobab /app /db
 
 ENV PYTHONUNBUFFERED=1

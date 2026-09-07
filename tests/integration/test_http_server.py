@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import os
+import random
 import unittest
 import urllib.error
 import urllib.request
@@ -107,6 +108,10 @@ class HttpServerIntegrationTests(unittest.TestCase):
     def test_context_resolve_end_to_end(self):
         tenant_id = f"test-tenant-{uuid.uuid4()}"
         entity_id = f"test-entity-{uuid.uuid4()}"
+        # A randomised ad_client_id: baobab.tenant_mapping has a unique index on
+        # (ad_client_id, ad_org_id) WHERE status = 'active', so a fixed literal could
+        # collide with another active row already present in the database.
+        ad_client_id = random.randint(100000, 999999)
         with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -114,16 +119,45 @@ class HttpServerIntegrationTests(unittest.TestCase):
                     INSERT INTO baobab.tenant_mapping (tenant_id, entity_id, ad_client_id, ad_org_id)
                     VALUES (%s, %s, %s, %s)
                     """,
-                    (tenant_id, entity_id, 1000, 1),
+                    (tenant_id, entity_id, ad_client_id, 1),
                 )
             connection.commit()
             try:
                 status, body = self._get(f"/context/resolve?tenant_id={tenant_id}&entity_id={entity_id}")
                 self.assertEqual(status, 200)
-                self.assertEqual(body, {"ad_client_id": 1000, "ad_org_id": 1})
+                self.assertEqual(body, {"ad_client_id": ad_client_id, "ad_org_id": 1})
 
                 status, _ = self._get(f"/context/resolve?tenant_id={tenant_id}&entity_id=no-such-entity")
                 self.assertEqual(status, 404)
+            finally:
+                with connection.cursor() as cursor:
+                    cursor.execute("DELETE FROM baobab.tenant_mapping WHERE tenant_id = %s", (tenant_id,))
+                connection.commit()
+
+    def test_context_resolve_tenant_end_to_end(self):
+        tenant_id = f"test-tenant-{uuid.uuid4()}"
+        entity_id = f"test-entity-{uuid.uuid4()}"
+        ad_client_id = random.randint(100000, 999999)
+        with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO baobab.tenant_mapping (tenant_id, entity_id, ad_client_id, ad_org_id)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    (tenant_id, entity_id, ad_client_id, 1),
+                )
+            connection.commit()
+            try:
+                status, body = self._get(f"/context/resolve-tenant?ad_client_id={ad_client_id}&ad_org_id=1")
+                self.assertEqual(status, 200)
+                self.assertEqual(body, {"tenant_id": tenant_id, "entity_id": entity_id})
+
+                status, _ = self._get("/context/resolve-tenant?ad_client_id=888888&ad_org_id=999")
+                self.assertEqual(status, 404)
+
+                status, _ = self._get("/context/resolve-tenant?ad_client_id=notanumber&ad_org_id=1")
+                self.assertEqual(status, 400)
             finally:
                 with connection.cursor() as cursor:
                     cursor.execute("DELETE FROM baobab.tenant_mapping WHERE tenant_id = %s", (tenant_id,))

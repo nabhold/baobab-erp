@@ -11,7 +11,7 @@ Each request opens its own short-lived Postgres connection: psycopg connections
 are not safe to share across the threads ThreadingHTTPServer uses for concurrent
 requests.
 
-/context/resolve and /mapping/resolve* have no authentication of their own yet --
+/context/resolve* and /mapping/resolve* have no authentication of their own yet --
 they rely on network-level trust (only reachable from inside the deployment's own
 network, e.g. the Compose network), same gap already noted for the rest of this
 module against ADR-ERP-010.
@@ -27,7 +27,7 @@ import psycopg
 from application.health import liveness, readiness
 from context.model import ContextResolutionError
 from context.postgres_store import PostgresTenantMappingStore
-from context.resolver import resolve_context
+from context.resolver import resolve_context, resolve_tenant
 from inbox.postgres_store import PostgresInboxStore
 from inbox.service import InvalidSignatureError, receive
 from mapping.model import MappingNotFoundError
@@ -88,6 +88,9 @@ def make_handler(config: Config) -> type[BaseHTTPRequestHandler]:
             if split.path == "/context/resolve":
                 self._handle_context_resolve(query)
                 return
+            if split.path == "/context/resolve-tenant":
+                self._handle_context_resolve_tenant(query)
+                return
             if split.path == "/mapping/resolve":
                 self._handle_mapping_resolve(query)
                 return
@@ -111,6 +114,21 @@ def make_handler(config: Config) -> type[BaseHTTPRequestHandler]:
                 self._send_json(404, {"error": str(exc)})
                 return
             self._send_json(200, {"ad_client_id": context.ad_client_id, "ad_org_id": context.ad_org_id})
+
+        def _handle_context_resolve_tenant(self, query: dict) -> None:
+            ad_client_id = self._query_param(query, "ad_client_id")
+            ad_org_id = self._query_param(query, "ad_org_id")
+            if not ad_client_id or not ad_client_id.isdigit() or not ad_org_id or not ad_org_id.isdigit():
+                self._send_json(400, {"error": "numeric ad_client_id and ad_org_id are both required"})
+                return
+            try:
+                with psycopg.connect(config.database_url) as connection:
+                    store = PostgresTenantMappingStore(connection)
+                    context = resolve_tenant(int(ad_client_id), int(ad_org_id), store)
+            except ContextResolutionError as exc:
+                self._send_json(404, {"error": str(exc)})
+                return
+            self._send_json(200, {"tenant_id": context.tenant_id, "entity_id": context.entity_id})
 
         def _handle_mapping_resolve(self, query: dict) -> None:
             tenant_id = self._query_param(query, "tenant_id")

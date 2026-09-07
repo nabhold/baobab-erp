@@ -53,4 +53,24 @@ final class BaobabContextResolver implements ContextResolver {
         }
         return new ResolvedContext(adClientId.intValue(), adOrgId.intValue());
     }
+
+    @Override
+    public TenantIdentity resolveTenant(int adClientId, int adOrgId) throws ContextResolutionException {
+        Map<String, Object> body;
+        try {
+            body = client.get("/context/resolve-tenant?ad_client_id=" + adClientId + "&ad_org_id=" + adOrgId);
+        } catch (BaobabAppNotFoundException e) {
+            throw new ContextResolutionException(
+                    "No active mapping for adClientId=" + adClientId + " adOrgId=" + adOrgId);
+        } catch (BaobabAppClientException e) {
+            throw new ContextResolutionException("Could not resolve tenant via baobab-app: " + e.getMessage());
+        }
+
+        Object tenantId = body.get("tenant_id");
+        Object entityId = body.get("entity_id");
+        if (tenantId == null || entityId == null) {
+            throw new ContextResolutionException("baobab-app response missing tenant_id/entity_id: " + body);
+        }
+        return new TenantIdentity(tenantId.toString(), entityId.toString());
+    }
 }
