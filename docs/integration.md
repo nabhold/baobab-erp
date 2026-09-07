@@ -48,28 +48,33 @@ ERP command handler decides whether and how intelligence becomes an operational 
 Code running inside iDempiere's own JVM (the OSGi bundles in `idempiere/extensions/`)
 has no direct access to the `baobab` Postgres schema either -- it reaches the same
 context/mapping resolution logic over HTTP, calling baobab-app's
-`GET /context/resolve` and `GET /mapping/resolve(-canonical)` endpoints. The shared
-`org.nabhold.baobab.erp.integration` bundle (`BaobabAppClient`, a small dependency-free
-JSON parser) is the one place that knows how to make that call; `context` and `mapping`
-each depend on it rather than duplicating HTTP/JSON handling. This keeps "who touches
-the `baobab` schema" answered the same way from both sides of the process boundary:
-only `modules/`, via baobab-app.
+`GET /context/resolve(-tenant)` and `GET /mapping/resolve(-canonical)` endpoints. The
+shared `org.nabhold.baobab.erp.integration` bundle (`BaobabAppClient`, a small
+dependency-free JSON parser) is the one place that knows how to make that call;
+`context`, `mapping` and `events` each depend on it rather than duplicating HTTP/JSON
+handling. This keeps "who touches the `baobab` schema" answered the same way from both
+sides of the process boundary: only `modules/`, via baobab-app.
 
 The `events` bundle is the other direction: a real iDempiere-fired event, not a
 Baobab-initiated call. It registers a plain `org.osgi.service.event.EventHandler` for
 iDempiere's own `adempiere/po/postCreate`/`adempiere/po/postUpdate` topics (filtered to
 `C_BPartner`), which fire asynchronously, after the record's own transaction has
-committed. When one fires, it calls the registered `CanonicalMappingResolver` service
-(from `mapping`, looked up via a `ServiceTracker`) to resolve the changed record's
-canonical Party identity -- the same `GET /mapping/resolve-canonical` call `mapping`
-already makes, just triggered by iDempiere itself instead of a test. The tenant this
-iDempiere instance serves comes from a `baobab.tenant.id` system property (see
-`idempiere/README.md`); the bundle logs and does nothing if it isn't set.
+committed. When one fires, it first calls the registered `ContextResolver` service
+(from `context`) to turn the changed record's own `AD_Client_ID`/`AD_Org_ID` into a
+tenant -- `GET /context/resolve-tenant`, the reverse of `context`'s usual direction --
+then calls the registered `CanonicalMappingResolver` service (from `mapping`) to resolve
+the record's canonical Party identity for that tenant -- `GET /mapping/resolve-canonical`,
+the same call `mapping` already makes, just triggered by iDempiere itself instead of a
+test. Resolving the tenant per event, rather than assuming one tenant for the whole
+process, is required by ADR-ERP-003's default deployment topology
+(`ERP_SHARED_INSTANCE_DEDICATED_CLIENT`): one iDempiere runtime commonly hosts several
+`AD_Client`s (tenants) at once, so a process-wide tenant would silently misattribute (or
+drop) every other tenant's events.
 
 ## Status
 
-The HTTP layer (including `/context/resolve` and `/mapping/resolve*`), outbox/inbox,
-and their Postgres-backed stores are wired end-to-end and covered by
+The HTTP layer (including `/context/resolve(-tenant)` and `/mapping/resolve*`),
+outbox/inbox, and their Postgres-backed stores are wired end-to-end and covered by
 `tests/integration/` against a real database. `BaobabContextResolver` and
 `BaobabMappingResolver` now call those endpoints for real, tested against a real local
 HTTP server reproducing baobab-app's exact response shapes (not mocked) -- see each

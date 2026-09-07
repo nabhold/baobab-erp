@@ -4,6 +4,7 @@ import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 import java.util.Dictionary;
 import java.util.Hashtable;
+import org.nabhold.baobab.erp.context.ContextResolver;
 import org.nabhold.baobab.erp.mapping.CanonicalMappingResolver;
 import org.osgi.framework.BundleActivator;
 import org.osgi.framework.BundleContext;
@@ -13,16 +14,12 @@ import org.osgi.util.tracker.ServiceTracker;
 
 /**
  * Subscribes {@link BaobabCanonicalMappingEventHandler} to iDempiere's own
- * PO_POST_CREATE/PO_POST_UPADTE OSGi events for C_BPartner. Uses a {@link ServiceTracker}
- * for CanonicalMappingResolver rather than a direct {@code getServiceReference} call at
- * start() time, since OSGi does not guarantee this bundle starts after
- * org.nabhold.baobab.erp.mapping.
+ * PO_POST_CREATE/PO_POST_UPADTE OSGi events for C_BPartner. Uses {@link ServiceTracker}s
+ * for ContextResolver and CanonicalMappingResolver rather than direct
+ * {@code getServiceReference} calls at start() time, since OSGi does not guarantee this
+ * bundle starts after org.nabhold.baobab.erp.context/.mapping.
  */
 public final class EventsActivator implements BundleActivator {
-
-    /** System property naming the tenant this iDempiere instance serves; see
-     * BaobabMappingResolver.BASE_URL_PROPERTY for the matching pattern and gap note. */
-    static final String TENANT_ID_PROPERTY = "baobab.tenant.id";
 
     private static final String TOPIC_PO_POST_CREATE = "adempiere/po/postCreate";
     private static final String TOPIC_PO_POST_UPDATE = "adempiere/po/postUpdate";
@@ -30,16 +27,19 @@ public final class EventsActivator implements BundleActivator {
 
     private static final Logger LOG = System.getLogger(EventsActivator.class.getName());
 
-    private ServiceTracker<CanonicalMappingResolver, CanonicalMappingResolver> tracker;
+    private ServiceTracker<ContextResolver, ContextResolver> contextTracker;
+    private ServiceTracker<CanonicalMappingResolver, CanonicalMappingResolver> mappingTracker;
 
     @Override
     public void start(BundleContext context) {
         LOG.log(Level.INFO, "Baobab ERP events bundle starting");
-        tracker = new ServiceTracker<>(context, CanonicalMappingResolver.class, null);
-        tracker.open();
+        contextTracker = new ServiceTracker<>(context, ContextResolver.class, null);
+        contextTracker.open();
+        mappingTracker = new ServiceTracker<>(context, CanonicalMappingResolver.class, null);
+        mappingTracker.open();
 
-        BaobabCanonicalMappingEventHandler handler = new BaobabCanonicalMappingEventHandler(
-                tracker, System.getProperty(TENANT_ID_PROPERTY));
+        BaobabCanonicalMappingEventHandler handler =
+                new BaobabCanonicalMappingEventHandler(contextTracker, mappingTracker);
 
         Dictionary<String, Object> properties = new Hashtable<>();
         properties.put(EventConstants.EVENT_TOPIC, new String[] {TOPIC_PO_POST_CREATE, TOPIC_PO_POST_UPDATE});
@@ -50,8 +50,11 @@ public final class EventsActivator implements BundleActivator {
     @Override
     public void stop(BundleContext context) {
         LOG.log(Level.INFO, "Baobab ERP events bundle stopping");
-        if (tracker != null) {
-            tracker.close();
+        if (contextTracker != null) {
+            contextTracker.close();
+        }
+        if (mappingTracker != null) {
+            mappingTracker.close();
         }
     }
 }

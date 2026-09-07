@@ -45,36 +45,45 @@ Four bundles exist today:
   baobab-app over HTTP and parse its (small, flat) JSON responses -- everything inside
   iDempiere's JVM that needs the `baobab` Postgres schema goes through this, since it
   has no direct database access of its own.
-- `events`: the first bundle that *consumes* another bundle's OSGi service rather than
-  just sharing a library -- it tracks `mapping`'s `CanonicalMappingResolver` (via a
-  `ServiceTracker`, since OSGi doesn't guarantee bundle start order) and registers a
-  plain `org.osgi.service.event.EventHandler` for iDempiere's own
-  `adempiere/po/postCreate`/`adempiere/po/postUpdate` topics, filtered to `C_BPartner`.
-  These two topics are iDempiere's *asynchronous* model-change events -- they fire on
-  iDempiere's own EventAdmin dispatch thread, after the triggering transaction has
-  committed -- so the resulting blocking HTTP call to baobab-app never runs inside a
-  document transaction (ADR-ERP-004, INV-ERP-EXT-011). This closes the ADR-ERP-007 gap
-  that used to read "no extension point inside iDempiere invokes the registered
+- `events`: the first bundle that *consumes* other bundles' OSGi services rather than
+  just sharing a library -- it tracks `context`'s `ContextResolver` and `mapping`'s
+  `CanonicalMappingResolver` (each via a `ServiceTracker`, since OSGi doesn't guarantee
+  bundle start order) and registers a plain `org.osgi.service.event.EventHandler` for
+  iDempiere's own `adempiere/po/postCreate`/`adempiere/po/postUpdate` topics, filtered to
+  `C_BPartner`. These two topics are iDempiere's *asynchronous* model-change events --
+  they fire on iDempiere's own EventAdmin dispatch thread, after the triggering
+  transaction has committed -- so the resulting blocking HTTP calls to baobab-app never
+  run inside a document transaction (ADR-ERP-004, INV-ERP-EXT-011). On every such event
+  it first derives the owning tenant from the changed record's own
+  `AD_Client_ID`/`AD_Org_ID` (`ContextResolver.resolveTenant`, the reverse of
+  `context`'s usual direction), then resolves the record's canonical Party identity
+  (`CanonicalMappingResolver.resolveToCanonical`). Deriving the tenant per record, rather
+  than assuming one tenant for the whole process, matters because ADR-ERP-003's default
+  topology (`ERP_SHARED_INSTANCE_DEDICATED_CLIENT`) has one iDempiere runtime hosting
+  several `AD_Client`s (tenants) at once. This closes the ADR-ERP-007 gap that used to
+  read "no extension point inside iDempiere invokes the registered
   CanonicalMappingResolver service during a real request yet" -- for `C_BPartner`, one
-  now genuinely does. It needs no iDempiere Maven artifact at compile time: iDempiere's
-  own `AbstractEventHandler` is built entirely on the standard OSGi
-  `org.osgi.service.event.EventHandler` contract (verified directly against
-  `github.com/idempiere/idempiere`), which is on Maven Central under the same `org.osgi`
-  groupId as `org.osgi.core`. The only iDempiere-shaped value this bundle touches -- a
-  changed record's numeric id -- is read via one reflective call to the PO object's
-  `get_ID()` method, since `org.compiere.model.PO` itself isn't on the compile classpath.
+  now genuinely does, correctly, across every tenant sharing the instance. It needs no
+  iDempiere Maven artifact at compile time: iDempiere's own `AbstractEventHandler` is
+  built entirely on the standard OSGi `org.osgi.service.event.EventHandler` contract
+  (verified directly against `github.com/idempiere/idempiere`), which is on Maven Central
+  under the same `org.osgi` groupId as `org.osgi.core`. The only iDempiere-shaped values
+  this bundle touches -- a changed record's numeric id, `AD_Client_ID` and `AD_Org_ID` --
+  are read via reflective calls to the PO object's `get_ID()`, `getAD_Client_ID()` and
+  `getAD_Org_ID()` methods, since `org.compiere.model.PO` itself isn't on the compile
+  classpath.
 
 The remaining namespaces are reserved and unimplemented; do not create empty placeholder
 bundles for them before there is a real extension point to fill.
 
-Both resolvers read baobab-app's base URL from the `baobab.app.base.url` system
-property, defaulting to `http://baobab-app:8000` (the Compose service name/port from
-`compose.yaml`, so the default already works for that topology unmodified). `events`
-reads the tenant this iDempiere instance serves from a new `baobab.tenant.id` system
-property (no default; the bundle logs a warning and does nothing until it's set).
-Overriding either in a real deployment means passing `-Dbaobab.app.base.url=...
--Dbaobab.tenant.id=...` to iDempiere's own JVM launch, which isn't wired up here yet --
-it depends on the pinned base image's own entrypoint/launcher mechanism.
+All three resolver-backed bundles read baobab-app's base URL from the
+`baobab.app.base.url` system property, defaulting to `http://baobab-app:8000` (the
+Compose service name/port from `compose.yaml`, so the default already works for that
+topology unmodified). Overriding it in a real deployment means passing
+`-Dbaobab.app.base.url=...` to iDempiere's own JVM launch, which isn't wired up here yet
+-- it depends on the pinned base image's own entrypoint/launcher mechanism. `events` needs
+no comparable per-tenant configuration of its own: it derives the tenant per event from
+data already on the record, over the same already-defaulted baobab-app connection.
 
 ## Building
 
@@ -94,10 +103,11 @@ directory's README for when it would be worth adding.
 `mapping`'s HTTP calls to baobab-app against a real local server
 (`com.sun.net.httpserver.HttpServer`, part of the JDK, no extra test dependency)
 reproducing baobab-app's actual response shapes -- not mocked. `events`' tests build a
-real `org.osgi.service.event.Event` (also not mocked) against a small recording
-`CanonicalMappingResolver` double, since its own job is proving it extracts the right
-tenant/table/record id from a real event, not re-proving `mapping`'s already-tested HTTP
-wire format. `idempiere/Dockerfile`'s build stage passes `-DskipTests` since CI's
+real `org.osgi.service.event.Event` (also not mocked) against small recording
+`ContextResolver`/`CanonicalMappingResolver` doubles, since its own job is proving it
+extracts AD_Client_ID/AD_Org_ID/table/record id correctly from a real event and derives
+the tenant per event, not re-proving `context`'s or `mapping`'s already-tested HTTP wire
+format. `idempiere/Dockerfile`'s build stage passes `-DskipTests` since CI's
 `build-extensions` job already runs them separately for faster feedback.
 
 ## Third-party plugins are not automatic

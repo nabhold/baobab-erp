@@ -23,26 +23,31 @@ adrs:
     status: partial
     evidence:
       - db/migrations/0002_create_tenant_mapping.sql
+      - db/migrations/0006_add_tenant_mapping_native_unique_index.sql
       - modules/context/postgres_store.py
       - modules/application/server.py
       - tests/integration/test_postgres_context_store.py
       - tests/integration/test_http_server.py
+      - tests/tenancy/test_context_resolver.py
       - idempiere/extensions/org.nabhold.baobab.erp.context/
       - idempiere/extensions/org.nabhold.baobab.erp.integration/
+      - idempiere/extensions/org.nabhold.baobab.erp.events/
     gap: >
       modules/context resolves against a real Postgres-backed store, exposed over
       HTTP at GET /context/resolve. BaobabContextResolver (the OSGi bundle running
       inside iDempiere) now calls that endpoint for real -- tested against a real
       local HTTP server reproducing the exact response shape -- instead of always
-      failing closed. What's still missing: no extension point inside iDempiere
-      (event handler, model validator) actually invokes the registered
-      ContextResolver OSGi service during a real request yet, so the loop is
-      real end-to-end in tests but not yet exercised by iDempiere itself. This is
-      a distinct gap from ADR-ERP-007's (now closed for CanonicalMappingResolver,
-      see below): this direction (tenant -> AD_Client/AD_Org) is driven by
-      inbound requests, which still depends on the deferred REST API plugin
-      (ADR-ERP-005/ADR-ERP-013), unlike CanonicalMappingResolver's outbound
-      direction, which a real iDempiere-fired event can drive without it.
+      failing closed. The forward direction (tenant -> AD_Client/AD_Org) still has
+      no invoking extension point inside iDempiere: it's driven by inbound requests,
+      which still depends on the deferred REST API plugin (ADR-ERP-005/ADR-ERP-013).
+      The reverse direction (AD_Client/AD_Org -> tenant), added alongside this note
+      as ContextResolver.resolveTenant / GET /context/resolve-tenant, backed by a new
+      unique index on baobab.tenant_mapping(ad_client_id, ad_org_id) WHERE
+      status='active' so it's unambiguous, DOES now have a real invoking extension
+      point: the `events` bundle calls it on every real C_BPartner
+      create/update to derive the correct tenant per record (ADR-ERP-003's default
+      topology puts several AD_Clients/tenants on one iDempiere runtime, so a single
+      process-wide tenant would be wrong) -- see ADR-ERP-007's evidence below.
 
   - id: ADR-ERP-003
     title: ERP EngineInstance isolation, regional deployment and data residency
@@ -65,13 +70,14 @@ adrs:
       library bundle (no Activator, no published OSGi service) that `context` and
       `mapping` both depend on for reaching baobab-app over HTTP -- a real,
       inter-bundle OSGi dependency (Import/Export-Package), not just shared source.
-      `events` goes further: it's the first bundle that consumes another bundle's
-      OSGi *service* (mapping's CanonicalMappingResolver, via a ServiceTracker)
-      rather than just sharing a library, and it registers a plain
-      org.osgi.service.event.EventHandler for iDempiere's own asynchronous
-      adempiere/po/postCreate and postUpdate topics -- a real, working example of
-      the "event handler" extension mechanism named throughout this ADR, requiring
-      no iDempiere Maven artifact at compile time (see idempiere/README.md).
+      `events` goes further: it's the first bundle that consumes other bundles'
+      OSGi *services* (context's ContextResolver and mapping's
+      CanonicalMappingResolver, each via a ServiceTracker) rather than just sharing
+      a library, and it registers a plain org.osgi.service.event.EventHandler for
+      iDempiere's own asynchronous adempiere/po/postCreate and postUpdate topics --
+      a real, working example of the "event handler" extension mechanism named
+      throughout this ADR, requiring no iDempiere Maven artifact at compile time
+      (see idempiere/README.md).
 
   - id: ADR-ERP-005
     title: Baobab ERP integration API architecture
@@ -137,13 +143,16 @@ adrs:
       gap that used to sit here is now closed for C_BPartner: the `events` bundle
       registers a real org.osgi.service.event.EventHandler for iDempiere's own
       asynchronous adempiere/po/postCreate/postUpdate topics, filtered to
-      C_BPartner, and calls CanonicalMappingResolver.resolveToCanonical on every
-      such event -- a real iDempiere request now invokes the registered service,
-      not just a test. What's still open: the tenant this iDempiere instance
-      serves comes from a new baobab.tenant.id system property that, like
-      baobab.app.base.url, isn't yet wired into the container's actual JVM launch
-      (see idempiere/README.md); and only C_BPartner is wired, not the rest of
-      ADR-ERP-007's initial mapping matrix (M_Product, C_Order, C_Invoice, ...).
+      C_BPartner. On every such event it first derives the owning tenant from the
+      changed record's own AD_Client_ID/AD_Org_ID via ContextResolver.resolveTenant
+      (see ADR-ERP-002's evidence), then calls
+      CanonicalMappingResolver.resolveToCanonical for that tenant -- a real
+      iDempiere request now invokes both registered services, correctly, even when
+      one iDempiere instance hosts several tenants at once (ADR-ERP-003's default
+      topology), which an earlier version of this bundle got wrong (a single
+      process-wide tenant system property, caught in review before merge). What's
+      still open: only C_BPartner is wired, not the rest of ADR-ERP-007's initial
+      mapping matrix (M_Product, C_Order, C_Invoice, ...).
 
   - id: ADR-ERP-008
     title: ERP financial, accounting and multi-currency architecture

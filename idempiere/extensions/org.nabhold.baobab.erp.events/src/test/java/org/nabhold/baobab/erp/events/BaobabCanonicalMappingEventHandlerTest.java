@@ -7,17 +7,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.nabhold.baobab.erp.context.ContextResolver;
 import org.nabhold.baobab.erp.mapping.CanonicalMappingResolver;
 import org.osgi.service.event.Event;
 
 /**
  * Exercises BaobabCanonicalMappingEventHandler against a real org.osgi.service.event.Event
- * (not a mock) and a small recording CanonicalMappingResolver double -- this class's own
- * job is proving the handler extracts tenantId/tableName/recordId correctly from a real
- * event and calls (or correctly skips) the resolver, not re-proving BaobabMappingResolver's
- * HTTP wire format, which BaobabMappingResolverTest (in the mapping bundle) already covers
- * against a real local HTTP server. FakeNativePO stands in for org.compiere.model.PO, which
- * isn't available at compile time; it exposes only the one method the handler calls
+ * (not a mock) and small recording ContextResolver/CanonicalMappingResolver doubles --
+ * this class's own job is proving the handler extracts AD_Client_ID/AD_Org_ID/tableName/
+ * recordId correctly from a real event and derives the tenant per event (never a
+ * process-wide assumption), not re-proving BaobabContextResolver's or
+ * BaobabMappingResolver's HTTP wire format, which their own tests already cover against
+ * real local HTTP servers. FakeNativePO stands in for org.compiere.model.PO, which isn't
+ * available at compile time; it exposes only the three methods the handler calls
  * reflectively.
  */
 class BaobabCanonicalMappingEventHandlerTest {
@@ -33,74 +35,156 @@ class BaobabCanonicalMappingEventHandlerTest {
     }
 
     @Test
-    void resolvesCanonicalIdOnRealEvent() {
-        RecordingResolver resolver = RecordingResolver.returning(CANONICAL_ID);
-        BaobabCanonicalMappingEventHandler handler = new BaobabCanonicalMappingEventHandler(resolver, "nabhold");
+    void derivesTenantPerEventThenResolvesCanonicalId() {
+        RecordingContextResolver contextResolver = RecordingContextResolver.returning("nabhold", "nabhold-legal");
+        RecordingMappingResolver mappingResolver = RecordingMappingResolver.returning(CANONICAL_ID);
+        BaobabCanonicalMappingEventHandler handler =
+                new BaobabCanonicalMappingEventHandler(contextResolver, mappingResolver);
 
-        handler.handleEvent(bPartnerEvent(new FakeNativePO(1001)));
+        handler.handleEvent(bPartnerEvent(new FakeNativePO(1001, 1000, 1)));
 
-        assertEquals("nabhold", resolver.tenantId);
-        assertEquals("C_BPartner", resolver.table);
-        assertEquals(1001, resolver.recordId);
+        assertEquals(1000, contextResolver.adClientId);
+        assertEquals(1, contextResolver.adOrgId);
+        assertEquals("nabhold", mappingResolver.tenantId);
+        assertEquals("C_BPartner", mappingResolver.table);
+        assertEquals(1001, mappingResolver.recordId);
+    }
+
+    @Test
+    void secondClientOnTheSameJvmResolvesToItsOwnTenant() {
+        // The classic multi-client-per-instance case (ADR-ERP-003's default topology):
+        // two different AD_Client_IDs in the same process must resolve to two different
+        // tenants, never the same one.
+        RecordingContextResolver contextResolver = RecordingContextResolver.returning("thamani", "thamani-legal");
+        RecordingMappingResolver mappingResolver = RecordingMappingResolver.returning(CANONICAL_ID);
+        BaobabCanonicalMappingEventHandler handler =
+                new BaobabCanonicalMappingEventHandler(contextResolver, mappingResolver);
+
+        handler.handleEvent(bPartnerEvent(new FakeNativePO(42, 2000, 3)));
+
+        assertEquals(2000, contextResolver.adClientId);
+        assertEquals(3, contextResolver.adOrgId);
+        assertEquals("thamani", mappingResolver.tenantId);
+    }
+
+    @Test
+    void unmappedClientSkipsMappingResolutionEntirely() {
+        RecordingContextResolver contextResolver = RecordingContextResolver.notFound();
+        RecordingMappingResolver mappingResolver = RecordingMappingResolver.returning(CANONICAL_ID);
+        BaobabCanonicalMappingEventHandler handler =
+                new BaobabCanonicalMappingEventHandler(contextResolver, mappingResolver);
+
+        handler.handleEvent(bPartnerEvent(new FakeNativePO(1001, 9999, 9)));
+
+        assertTrue(contextResolver.called);
+        assertFalse(mappingResolver.called, "mapping resolver must not be called without a resolved tenant");
     }
 
     @Test
     void missingMappingDoesNotThrow() {
-        RecordingResolver resolver = RecordingResolver.notFound();
-        BaobabCanonicalMappingEventHandler handler = new BaobabCanonicalMappingEventHandler(resolver, "nabhold");
+        RecordingContextResolver contextResolver = RecordingContextResolver.returning("nabhold", "nabhold-legal");
+        RecordingMappingResolver mappingResolver = RecordingMappingResolver.notFound();
+        BaobabCanonicalMappingEventHandler handler =
+                new BaobabCanonicalMappingEventHandler(contextResolver, mappingResolver);
 
-        handler.handleEvent(bPartnerEvent(new FakeNativePO(999999)));
+        handler.handleEvent(bPartnerEvent(new FakeNativePO(999999, 1000, 1)));
 
-        assertTrue(resolver.called, "resolver should still have been called");
-    }
-
-    @Test
-    void blankTenantIdSkipsResolutionEntirely() {
-        RecordingResolver resolver = RecordingResolver.returning(CANONICAL_ID);
-        BaobabCanonicalMappingEventHandler handler = new BaobabCanonicalMappingEventHandler(resolver, null);
-
-        handler.handleEvent(bPartnerEvent(new FakeNativePO(1001)));
-
-        assertFalse(resolver.called, "resolver must not be called without a tenant id");
+        assertTrue(mappingResolver.called, "mapping resolver should still have been called");
     }
 
     @Test
     void missingTableNamePropertySkipsResolutionEntirely() {
-        RecordingResolver resolver = RecordingResolver.returning(CANONICAL_ID);
-        BaobabCanonicalMappingEventHandler handler = new BaobabCanonicalMappingEventHandler(resolver, "nabhold");
-        Event eventWithoutTableName = new Event(TOPIC, Map.of("event.data", new FakeNativePO(1001)));
+        RecordingContextResolver contextResolver = RecordingContextResolver.returning("nabhold", "nabhold-legal");
+        RecordingMappingResolver mappingResolver = RecordingMappingResolver.returning(CANONICAL_ID);
+        BaobabCanonicalMappingEventHandler handler =
+                new BaobabCanonicalMappingEventHandler(contextResolver, mappingResolver);
+        Event eventWithoutTableName = new Event(TOPIC, Map.of("event.data", new FakeNativePO(1001, 1000, 1)));
 
         handler.handleEvent(eventWithoutTableName);
 
-        assertFalse(resolver.called, "resolver must not be called without a tableName property");
+        assertFalse(contextResolver.called, "context resolver must not be called without a tableName property");
+        assertFalse(mappingResolver.called, "mapping resolver must not be called without a tableName property");
     }
 
     @Test
     void missingEventDataSkipsResolutionEntirely() {
-        RecordingResolver resolver = RecordingResolver.returning(CANONICAL_ID);
-        BaobabCanonicalMappingEventHandler handler = new BaobabCanonicalMappingEventHandler(resolver, "nabhold");
+        RecordingContextResolver contextResolver = RecordingContextResolver.returning("nabhold", "nabhold-legal");
+        RecordingMappingResolver mappingResolver = RecordingMappingResolver.returning(CANONICAL_ID);
+        BaobabCanonicalMappingEventHandler handler =
+                new BaobabCanonicalMappingEventHandler(contextResolver, mappingResolver);
         Event eventWithoutData = new Event(TOPIC, Map.of("tableName", "C_BPartner"));
 
         handler.handleEvent(eventWithoutData);
 
-        assertFalse(resolver.called, "resolver must not be called without a PO to read the record id from");
+        assertFalse(contextResolver.called, "resolvers must not be called without a PO to read ids from");
+        assertFalse(mappingResolver.called, "resolvers must not be called without a PO to read ids from");
     }
 
-    /** Stands in for org.compiere.model.PO: only the reflectively-called method matters. */
+    /** Stands in for org.compiere.model.PO: only the reflectively-called methods matter. */
     static final class FakeNativePO {
         private final int id;
+        private final int adClientId;
+        private final int adOrgId;
 
-        FakeNativePO(int id) {
+        FakeNativePO(int id, int adClientId, int adOrgId) {
             this.id = id;
+            this.adClientId = adClientId;
+            this.adOrgId = adOrgId;
         }
 
         public int get_ID() {
             return id;
         }
+
+        public int getAD_Client_ID() {
+            return adClientId;
+        }
+
+        public int getAD_Org_ID() {
+            return adOrgId;
+        }
+    }
+
+    /** Records the AD_Client_ID/AD_Org_ID resolveTenant was called with; never touches the network. */
+    static final class RecordingContextResolver implements ContextResolver {
+        private final TenantIdentity identity;
+        private final boolean notFound;
+        boolean called;
+        int adClientId;
+        int adOrgId;
+
+        private RecordingContextResolver(TenantIdentity identity, boolean notFound) {
+            this.identity = identity;
+            this.notFound = notFound;
+        }
+
+        static RecordingContextResolver returning(String tenantId, String legalEntityId) {
+            return new RecordingContextResolver(new TenantIdentity(tenantId, legalEntityId), false);
+        }
+
+        static RecordingContextResolver notFound() {
+            return new RecordingContextResolver(null, true);
+        }
+
+        @Override
+        public ResolvedContext resolve(String tenantId, String legalEntityId) {
+            throw new UnsupportedOperationException("not used by this handler");
+        }
+
+        @Override
+        public TenantIdentity resolveTenant(int adClientId, int adOrgId) throws ContextResolutionException {
+            this.called = true;
+            this.adClientId = adClientId;
+            this.adOrgId = adOrgId;
+            if (notFound) {
+                throw new ContextResolutionException("no mapping for " + adClientId + "/" + adOrgId);
+            }
+            return identity;
+        }
     }
 
     /** Records the arguments resolveToCanonical was called with; never touches the network. */
-    static final class RecordingResolver implements CanonicalMappingResolver {
+    static final class RecordingMappingResolver implements CanonicalMappingResolver {
         private final String canonicalId;
         private final boolean notFound;
         boolean called;
@@ -108,17 +192,17 @@ class BaobabCanonicalMappingEventHandlerTest {
         String table;
         int recordId;
 
-        private RecordingResolver(String canonicalId, boolean notFound) {
+        private RecordingMappingResolver(String canonicalId, boolean notFound) {
             this.canonicalId = canonicalId;
             this.notFound = notFound;
         }
 
-        static RecordingResolver returning(String canonicalId) {
-            return new RecordingResolver(canonicalId, false);
+        static RecordingMappingResolver returning(String canonicalId) {
+            return new RecordingMappingResolver(canonicalId, false);
         }
 
-        static RecordingResolver notFound() {
-            return new RecordingResolver(null, true);
+        static RecordingMappingResolver notFound() {
+            return new RecordingMappingResolver(null, true);
         }
 
         @Override

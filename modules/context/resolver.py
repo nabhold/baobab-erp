@@ -13,6 +13,8 @@ class TenantMappingStore(Protocol):
 
     def find_active_mapping(self, tenant_id: str, entity_id: str) -> tuple[int, int] | None: ...
 
+    def find_by_native(self, ad_client_id: int, ad_org_id: int) -> tuple[str, str] | None: ...
+
 
 def resolve_context(
     tenant_id: str | None,
@@ -30,4 +32,27 @@ def resolve_context(
         )
 
     ad_client_id, ad_org_id = mapping
+    return TenantContext(tenant_id=tenant_id, entity_id=entity_id, ad_client_id=ad_client_id, ad_org_id=ad_org_id)
+
+
+def resolve_tenant(
+    ad_client_id: int,
+    ad_org_id: int,
+    store: TenantMappingStore,
+) -> TenantContext:
+    """Resolve an iDempiere-native (AD_Client_ID, AD_Org_ID) pair back to the Baobab
+    tenant/legal-entity that owns it, or raise. Never guesses.
+
+    Needed because ADR-ERP-003's default topology (ERP_SHARED_INSTANCE_DEDICATED_CLIENT)
+    has one iDempiere runtime hosting several AD_Clients (tenants) at once: code running
+    inside that runtime cannot assume a single tenant for the whole process and must
+    derive it per record from the record's own AD_Client_ID/AD_Org_ID.
+    """
+    mapping = store.find_by_native(ad_client_id, ad_org_id)
+    if mapping is None:
+        raise ContextResolutionError(
+            f"No active mapping for ad_client_id={ad_client_id!r} ad_org_id={ad_org_id!r}"
+        )
+
+    tenant_id, entity_id = mapping
     return TenantContext(tenant_id=tenant_id, entity_id=entity_id, ad_client_id=ad_client_id, ad_org_id=ad_org_id)
