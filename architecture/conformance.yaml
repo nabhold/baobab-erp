@@ -88,17 +88,31 @@ adrs:
       - modules/application/server.py
       - tests/unit/test_idempiere_client.py
       - tests/integration/test_http_server.py
+      - idempiere/Dockerfile
+      - idempiere/rest-api/README.md
+      - idempiere/vendor/rest-api-p2/
     gap: >
       The inbound HTTP server exists and is tested end-to-end (health checks, signed
       webhook receipt). RestIdempiereClient is now a real implementation (one-step JWT
       login, automatic token refresh, get/create/update against /models/{table}),
       verified against the com.trekglobal.idempiere.rest.api / bxservice/idempiere-rest
       OpenAPI spec and tested against a fake server reproducing that spec exactly --
-      but not yet against a real running iDempiere instance, because that REST API
-      plugin is not part of the pinned idempiereofficial/idempiere image and is not
-      yet installed by idempiere/Dockerfile (see idempiere/README.md). Until that
-      installation is wired up, no canonical operation can actually reach a live
-      iDempiere; that remains the most consequential gap in this ADR.
+      but not yet against a real running iDempiere instance. idempiere/Dockerfile now
+      has a real, verified install step (iDempiere's own update-prd.sh, confirmed
+      present in the pinned image by downloading and inspecting the actual release
+      archive, not assumed) gated on a p2 repository being present at
+      idempiere/vendor/rest-api-p2/ -- but that directory is empty by default, because
+      producing com.trekglobal.idempiere.rest.api's p2 repository needs a Tycho build
+      against a p2 repository of iDempiere's own core, which needs network access
+      (a p2 mirror, or a full source build of iDempiere core) this environment doesn't
+      have; see idempiere/rest-api/README.md for exactly what was checked and what
+      remains. Until someone supplies that repository, no canonical operation can
+      actually reach a live iDempiere; that remains the most consequential gap in this
+      ADR, though the installation half of it is no longer unverified guesswork.
+      Separately, the HTTP surface this ADR governs (modules/application/server.py)
+      is not yet the boundary API nabhold/shared publishes at contracts/erp/v1/openapi.yaml
+      -- see contracts.lock.yaml and docs/reconciliation-plan.md (Phase 3) for the
+      gap and what blocks closing it (no HTTP framework chosen yet, no auth).
 
   - id: ADR-ERP-006
     title: ERP canonical event architecture
@@ -133,7 +147,16 @@ adrs:
       supports today, but worth revisiting if/when ADR-ERP-013 moves past it; and
       there's no retry/backoff between ticks beyond dispatch_worker.py's own
       per-event backoff, so a failed tick just waits for the next fixed-interval
-      attempt.
+      attempt. Separately: EventEnvelope (modules/events/envelope.py) and
+      contracts/events/envelope.schema.json are baobab-erp's own bespoke shape,
+      not nabhold/shared's published CloudEvents 1.0 envelope
+      (contracts/events/v1/envelope.schema.json) -- nabhold/shared itself now
+      archives this repo's shape as the legacy fixture
+      contracts/events/v1/compatibility/legacy-trade-erp-event.json. See
+      contracts.lock.yaml and docs/reconciliation-plan.md (Phase 1) for the exact
+      field-level drift and why migrating the wrapper alone, ahead of Phase 2's
+      canonical-id work, isn't done yet. baobab-trade has not integrated
+      contracts/erp/v1 either, so this is readiness work, not an active break.
 
   - id: ADR-ERP-007
     title: ERP canonical entity and external reference mapping architecture
@@ -167,7 +190,12 @@ adrs:
       still open: C_Payment, M_InOut and M_Warehouse are in section 170's full
       mapping matrix but not yet in its checklist or wired here -- adding one is a
       one-line filter change in EventsActivator, not new code, since the handler
-      reads "tableName" generically.
+      reads "tableName" generically. Separately: baobab.entity_mapping's own shape
+      (bare-UUID canonical_id, 2-value status enum, no legal_entity_id or temporal
+      fields) has drifted from nabhold/shared's published
+      contracts/erp/v1/mapping.schema.json -- see contracts.lock.yaml and
+      docs/reconciliation-plan.md (Phase 2), which is itself blocked on this repo
+      not yet having a Control Plane integration to source legal_entity_id from.
 
   - id: ADR-ERP-008
     title: ERP financial, accounting and multi-currency architecture
@@ -250,10 +278,13 @@ adrs:
       acceptance for HIGH/CRITICAL CVEs in third-party libraries vendored inside the
       pinned idempiereofficial/idempiere 13-release image (no fixed build exists
       upstream as of 2026-09-06); it must be re-reviewed whenever
-      upstream.lock.yaml's iDempiere pin changes. Not yet wired: installing the
-      com.trekglobal.idempiere.rest.api plugin (a Maven/Tycho build + p2 provisioning
-      step, not a jar copy) that RestIdempiereClient needs a live instance to expose
-      -- see idempiere/README.md and ADR-ERP-005.
+      upstream.lock.yaml's iDempiere pin changes. Installing the
+      com.trekglobal.idempiere.rest.api plugin that RestIdempiereClient needs a live
+      instance to expose is a p2 provisioning step, not a jar copy, and idempiere/Dockerfile
+      now does that provisioning step for real (gated on idempiere/vendor/rest-api-p2/,
+      empty by default) -- what's still missing is the Maven/Tycho build that would
+      populate that directory, which needs network access this environment doesn't
+      have -- see idempiere/README.md, idempiere/rest-api/README.md and ADR-ERP-005.
 
   - id: ADR-ERP-014
     title: ERP master data ownership, synchronisation and reference data architecture

@@ -121,13 +121,19 @@ Copying a jar into the plugins directory (as `Dockerfile` does for our own bundl
 works for plugins that ship as a plain OSGi bundle. Some third-party plugins — notably
 the REST API (`com.trekglobal.idempiere.rest.api`, see
 `modules/integration/idempiere_client.py`) — are distributed as source that must be
-built with Maven/Tycho and installed into a running instance through iDempiere's own p2
-provisioning tooling (`update-rest-extensions.sh` in
-[bxservice/idempiere-rest](https://github.com/bxservice/idempiere-rest)), not by copying
-a jar at image-build time. That installation is not yet wired into `Dockerfile` or
-`compose.yaml`; until it is, `idempiere` in this repository's runtime has no REST API to
-answer `RestIdempiereClient`'s requests, even though the client itself is real and
-tested. Tracked in `architecture/conformance.yaml` against ADR-ERP-005 and ADR-ERP-013.
+built with Maven/Tycho into a p2 repository and installed into a running instance
+through iDempiere's own p2 provisioning tooling instead. `Dockerfile` now has that
+install step wired up (`update-prd.sh`, confirmed present in the pinned base image, not
+assumed), gated on a p2 repository being present at `idempiere/vendor/rest-api-p2/` —
+see `idempiere/rest-api/README.md` for exactly what that means and how to produce one.
+That directory is empty by default (its tracked, checked-in state): building the p2
+repository itself needs network access to either a p2 mirror or a full source build of
+iDempiere core that this repository's own CI/dev environment does not currently have,
+so until someone supplies one, the install step is a clean no-op and `idempiere` in
+this repository's runtime has no REST API to answer `RestIdempiereClient`'s requests —
+even though the client itself is real and tested, and the installation mechanism is now
+real and tested too. Tracked in `architecture/conformance.yaml` against ADR-ERP-005 and
+ADR-ERP-013.
 
 ## Runtime dependency
 

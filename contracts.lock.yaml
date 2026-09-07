@@ -1,0 +1,110 @@
+schema:
+  name: "nabhold-contract-consumption-lock"
+  version: "1.0"
+consumer:
+  repository: "nabhold/baobab-erp"
+  version: "0.1.0"
+sources:
+  shared:
+    repository: "nabhold/shared"
+    commit: "0d61ba0ffa1ede9b0a0a27321792e3fd4849921f"
+    contracts:
+      erp_openapi:
+        path: "contracts/erp/v1/openapi.yaml"
+        version: "1.0.0"
+        note: >-
+          Nabhold Baobab ERP Boundary API. baobab-erp's HTTP surface
+          (modules/application/server.py) does not yet implement these paths --
+          see architecture/conformance.yaml (ADR-ERP-erp-boundary reconciliation)
+          for the phased plan to close that gap.
+      erp_asyncapi:
+        path: "contracts/erp/v1/asyncapi.yaml"
+        version: "1.0.0"
+      erp_domain:
+        path: "contracts/erp/v1/domain.schema.json"
+        version: "current-at-pinned-commit"
+      erp_mapping:
+        path: "contracts/erp/v1/mapping.schema.json"
+        version: "current-at-pinned-commit"
+        note: >-
+          Richer than baobab-erp's own db/migrations entity_mapping table today:
+          adds legal_entity_id, mapping_id, a 5-value status enum, and temporal
+          revision fields. Not yet reconciled.
+      erp_provisioning_request:
+        path: "contracts/erp/v1/provisioning-request.schema.json"
+        version: "current-at-pinned-commit"
+      erp_provisioning_state:
+        path: "contracts/erp/v1/provisioning-state.schema.json"
+        version: "current-at-pinned-commit"
+      erp_business_partner_projection:
+        path: "contracts/erp/v1/business-partner-projection.schema.json"
+        version: "current-at-pinned-commit"
+      erp_customer_projection:
+        path: "contracts/erp/v1/customer-projection.schema.json"
+        version: "current-at-pinned-commit"
+      erp_warehouse_projection:
+        path: "contracts/erp/v1/warehouse-projection.schema.json"
+        version: "current-at-pinned-commit"
+      erp_invoice_outcome:
+        path: "contracts/erp/v1/invoice-outcome.schema.json"
+        version: "current-at-pinned-commit"
+      erp_payment_outcome:
+        path: "contracts/erp/v1/payment-outcome.schema.json"
+        version: "current-at-pinned-commit"
+      erp_inventory_availability:
+        path: "contracts/erp/v1/inventory-availability.schema.json"
+        version: "current-at-pinned-commit"
+      erp_order_consequence_status:
+        path: "contracts/erp/v1/order-consequence-status.schema.json"
+        version: "current-at-pinned-commit"
+      erp_commerce_order_consequence:
+        path: "contracts/erp/v1/commerce-order-consequence.schema.json"
+        version: "current-at-pinned-commit"
+      erp_system_of_record:
+        path: "contracts/erp/v1/system-of-record.yaml"
+        version: "current-at-pinned-commit"
+        note: >-
+          Ownership matrix for 24 concepts. ERP is sole canonical owner for
+          Business Partner, Supplier, Purchase Order, Invoice, Warehouse,
+          Accounting Entry, and Asset only -- no record is implicitly
+          bidirectional.
+      control_plane_domain:
+        path: "contracts/control-plane/v1/domain.schema.json"
+        version: "1"
+        note: >-
+          Source of tenantId (^tn_[a-z0-9]+) and legalEntityId pattern
+          constraints. baobab-erp's own db/migrations tenant_id columns do not
+          yet enforce this pattern.
+      problem_details:
+        path: "contracts/errors/v1/problem-details.schema.json"
+        version: "1"
+        note: >-
+          RFC 9457 application/problem+json. Not yet the error shape returned
+          by modules/application/server.py.
+      idempotency_policy:
+        path: "contracts/idempotency/v1/policy.yaml"
+        version: "1.0"
+      event_envelope:
+        path: "contracts/events/v1/envelope.schema.json"
+        version: "1"
+        note: >-
+          CloudEvents 1.0 structured JSON profile. baobab-erp's own
+          modules/events/envelope.py and contracts/events/envelope.schema.json
+          predate this and are archived by nabhold/shared itself as the legacy
+          shape (contracts/events/v1/compatibility/legacy-trade-erp-event.json).
+          See docs/reconciliation-plan.md (Phase 1) for the field-level plan and
+          why the wrapper migration is sequenced behind canonical-id work (Phase
+          2), not done ahead of it -- Trade has not integrated contracts/erp/v1
+          either, so this is readiness work, not blocking live traffic today.
+  control_plane:
+    repository: "nabhold/baobab-cp"
+    role: "authoritative runtime provider of authenticated tenant context, market registry and product entitlement"
+    api_contract_status: "published-in-nabhold/shared"
+  event_envelope:
+    owner: "nabhold/shared"
+    publication_status: "published"
+    format: "CloudEvents 1.0 structured JSON profile (contracts/events/v1/envelope.schema.json)"
+policy:
+  fail_on_unresolved_tenant_context: true
+  allow_cross_engine_database_access: false
+  allow_local_redefinition_as_canonical: false
