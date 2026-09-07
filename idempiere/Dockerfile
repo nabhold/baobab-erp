@@ -12,7 +12,7 @@ ARG IDEMPIERE_IMAGE=idempiereofficial/idempiere:13-release
 FROM maven:3.9-eclipse-temurin-17 AS extensions-builder
 WORKDIR /build
 COPY idempiere/extensions/ idempiere/extensions/
-RUN mvn -q -B -f idempiere/extensions package
+RUN mvn -q -B -f idempiere/extensions package -DskipTests
 
 FROM ${IDEMPIERE_IMAGE}
 
@@ -27,6 +27,7 @@ RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 # already creates and runs as a non-root "idempiere" user owning that tree.
 ARG IDEMPIERE_PLUGINS_DIR=/opt/idempiere/plugins
 
+COPY --from=extensions-builder --chown=idempiere:idempiere /build/idempiere/extensions/org.nabhold.baobab.erp.integration/target/org.nabhold.baobab.erp.integration-*.jar ${IDEMPIERE_PLUGINS_DIR}/
 COPY --from=extensions-builder --chown=idempiere:idempiere /build/idempiere/extensions/org.nabhold.baobab.erp.context/target/org.nabhold.baobab.erp.context-*.jar ${IDEMPIERE_PLUGINS_DIR}/
 COPY --from=extensions-builder --chown=idempiere:idempiere /build/idempiere/extensions/org.nabhold.baobab.erp.mapping/target/org.nabhold.baobab.erp.mapping-*.jar ${IDEMPIERE_PLUGINS_DIR}/
 

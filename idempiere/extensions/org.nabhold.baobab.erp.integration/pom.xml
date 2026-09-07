@@ -9,25 +9,23 @@
     <version>0.1.0</version>
   </parent>
 
-  <artifactId>org.nabhold.baobab.erp.mapping</artifactId>
+  <artifactId>org.nabhold.baobab.erp.integration</artifactId>
   <packaging>jar</packaging>
 
-  <name>Baobab ERP Mapping Bundle</name>
+  <name>Baobab ERP Integration Bundle</name>
   <description>
-    Reads CanonicalEntity/ExternalReference mappings to translate canonical identifiers
-    into iDempiere native record keys (C_BPartner, M_Product, M_Warehouse, ...) and back,
-    per ADR-ERP-007. Never treats an iDempiere ID as a canonical ID.
+    Shared library bundle used by the other Baobab OSGi extensions to reach the
+    baobab-app HTTP service (modules/application/server.py) -- the boundary through
+    which code running inside iDempiere's own JVM reaches the baobab Postgres schema,
+    since it has no direct database access of its own. See ADR-ERP-005. Exports
+    packages for other bundles to compile/import against; registers no OSGi service
+    of its own.
   </description>
 
   <dependencies>
     <dependency>
       <groupId>org.osgi</groupId>
       <artifactId>org.osgi.core</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.nabhold.baobab.erp</groupId>
-      <artifactId>org.nabhold.baobab.erp.integration</artifactId>
-      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
@@ -42,11 +40,10 @@
         <artifactId>bnd-maven-plugin</artifactId>
         <configuration>
           <bnd><![CDATA[
-Bundle-SymbolicName: org.nabhold.baobab.erp.mapping
-Bundle-Activator: org.nabhold.baobab.erp.mapping.MappingActivator
+Bundle-SymbolicName: org.nabhold.baobab.erp.integration
 Bundle-Vendor: Nabhold Group Africa
-Export-Package: org.nabhold.baobab.erp.mapping
-Import-Package: org.nabhold.baobab.erp.integration;version="[0.1,1)",*
+Export-Package: org.nabhold.baobab.erp.integration
+Import-Package: *
 ]]></bnd>
         </configuration>
       </plugin>

@@ -21,9 +21,12 @@
     <maven.compiler.release>17</maven.compiler.release>
     <osgi.core.version>6.0.0</osgi.core.version>
     <bnd.version>7.0.0</bnd.version>
+    <junit.jupiter.version>6.1.3</junit.jupiter.version>
+    <surefire.version>3.6.0</surefire.version>
   </properties>
 
   <modules>
+    <module>org.nabhold.baobab.erp.integration</module>
     <module>org.nabhold.baobab.erp.context</module>
     <module>org.nabhold.baobab.erp.mapping</module>
   </modules>
@@ -35,6 +38,12 @@
         <artifactId>org.osgi.core</artifactId>
         <version>${osgi.core.version}</version>
         <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.junit.jupiter</groupId>
+        <artifactId>junit-jupiter</artifactId>
+        <version>${junit.jupiter.version}</version>
+        <scope>test</scope>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -64,6 +73,11 @@
               <manifestFile>${project.build.outputDirectory}/META-INF/MANIFEST.MF</manifestFile>
             </archive>
           </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>${surefire.version}</version>
         </plugin>
       </plugins>
     </pluginManagement>

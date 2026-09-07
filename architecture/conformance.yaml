@@ -26,13 +26,18 @@ adrs:
       - modules/context/postgres_store.py
       - modules/application/server.py
       - tests/integration/test_postgres_context_store.py
+      - tests/integration/test_http_server.py
       - idempiere/extensions/org.nabhold.baobab.erp.context/
+      - idempiere/extensions/org.nabhold.baobab.erp.integration/
     gap: >
-      modules/context now resolves against a real Postgres-backed store, exercised
-      end-to-end through the HTTP application layer and integration tests. The OSGi
-      context bundle (idempiere/extensions) is still unwired and fails closed, since
-      nothing inside iDempiere calls it yet -- that half needs a real extension point
-      (event handler or model validator) invoking it, tracked here until built.
+      modules/context resolves against a real Postgres-backed store, exposed over
+      HTTP at GET /context/resolve. BaobabContextResolver (the OSGi bundle running
+      inside iDempiere) now calls that endpoint for real -- tested against a real
+      local HTTP server reproducing the exact response shape -- instead of always
+      failing closed. What's still missing: no extension point inside iDempiere
+      (event handler, model validator) actually invokes the registered
+      ContextResolver OSGi service during a real request yet, so the loop is
+      real end-to-end in tests but not yet exercised by iDempiere itself.
 
   - id: ADR-ERP-003
     title: ERP EngineInstance isolation, regional deployment and data residency
@@ -46,8 +51,14 @@ adrs:
     evidence:
       - idempiere/extensions/org.nabhold.baobab.erp.context/
       - idempiere/extensions/org.nabhold.baobab.erp.mapping/
+      - idempiere/extensions/org.nabhold.baobab.erp.integration/
       - idempiere/patches/README.md
-    gap: Only 2 of the 8 reserved namespaces have a bundle; the rest are unimplemented by design until there is a real extension point to fill.
+    gap: >
+      3 of the 8 reserved namespaces have a bundle; the rest are unimplemented by
+      design until there is a real extension point to fill. `integration` is a
+      library bundle (no Activator, no published OSGi service) that `context` and
+      `mapping` both depend on for reaching baobab-app over HTTP -- a real,
+      inter-bundle OSGi dependency (Import/Export-Package), not just shared source.
 
   - id: ADR-ERP-005
     title: Baobab ERP integration API architecture
@@ -101,13 +112,16 @@ adrs:
       - db/migrations/0003_create_entity_mapping.sql
       - modules/mapping/postgres_store.py
       - tests/integration/test_postgres_mapping_store.py
+      - tests/integration/test_http_server.py
       - idempiere/extensions/org.nabhold.baobab.erp.mapping/
+      - idempiere/extensions/org.nabhold.baobab.erp.integration/
     gap: >
-      modules/mapping now resolves canonical <-> native references against a real
-      Postgres-backed store, tested end-to-end. The OSGi mapping bundle
-      (idempiere/extensions) is still unwired and fails closed, same as the context
-      bundle under ADR-ERP-002 -- it needs a real extension point inside iDempiere
-      to call it.
+      modules/mapping resolves canonical <-> native references against a real
+      Postgres-backed store, exposed over HTTP at GET /mapping/resolve and
+      /mapping/resolve-canonical. BaobabMappingResolver (the OSGi bundle) now calls
+      those for real, tested against a real local HTTP server -- same remaining gap
+      as ADR-ERP-002: no extension point inside iDempiere invokes the registered
+      CanonicalMappingResolver service during a real request yet.
 
   - id: ADR-ERP-008
     title: ERP financial, accounting and multi-currency architecture

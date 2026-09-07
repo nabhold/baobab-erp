@@ -1,23 +1,38 @@
-"""Minimal HTTP application layer: liveness/readiness probes and the inbound
-signed-event webhook receiver. Deliberately stdlib-only (http.server) rather than
-a web framework -- no ADR has chosen one yet, and these three endpoints don't need
-one. A framework choice is tracked in architecture/conformance.yaml against
-ADR-ERP-005 if/when the surface grows past this.
+"""Minimal HTTP application layer: liveness/readiness probes, the inbound
+signed-event webhook receiver, and context/mapping resolution for the OSGi bundles
+in idempiere/extensions (they run inside iDempiere's own JVM and have no direct
+access to the baobab Postgres schema; this is how they reach it). Deliberately
+stdlib-only (http.server) rather than a web framework -- no ADR has chosen one yet,
+and this surface doesn't need one. A framework choice is tracked in
+architecture/conformance.yaml against ADR-ERP-005 if/when the surface grows past
+this.
 
 Each request opens its own short-lived Postgres connection: psycopg connections
 are not safe to share across the threads ThreadingHTTPServer uses for concurrent
 requests.
+
+/context/resolve and /mapping/resolve* have no authentication of their own yet --
+they rely on network-level trust (only reachable from inside the deployment's own
+network, e.g. the Compose network), same gap already noted for the rest of this
+module against ADR-ERP-010.
 """
 
 import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlsplit
 
 import psycopg
 
 from application.health import liveness, readiness
+from context.model import ContextResolutionError
+from context.postgres_store import PostgresTenantMappingStore
+from context.resolver import resolve_context
 from inbox.postgres_store import PostgresInboxStore
 from inbox.service import InvalidSignatureError, receive
+from mapping.model import MappingNotFoundError
+from mapping.postgres_store import PostgresCanonicalMappingStore
+from mapping.resolver import resolve_to_canonical, resolve_to_native
 
 
 class PsycopgProbe:
@@ -57,17 +72,81 @@ def make_handler(config: Config) -> type[BaseHTTPRequestHandler]:
             self.wfile.write(payload)
 
         def do_GET(self) -> None:  # noqa: N802 - stdlib method name
-            if self.path == "/health/live":
+            split = urlsplit(self.path)
+            query = parse_qs(split.query)
+
+            if split.path == "/health/live":
                 self._send_json(200, liveness())
                 return
-            if self.path == "/health/ready":
+            if split.path == "/health/ready":
                 try:
                     with psycopg.connect(config.database_url) as connection:
                         self._send_json(200, readiness(PsycopgProbe(connection)))
                 except Exception as exc:  # noqa: BLE001 - reported as a 503, not raised
                     self._send_json(503, {"status": "not_ready", "error": str(exc)})
                 return
+            if split.path == "/context/resolve":
+                self._handle_context_resolve(query)
+                return
+            if split.path == "/mapping/resolve":
+                self._handle_mapping_resolve(query)
+                return
+            if split.path == "/mapping/resolve-canonical":
+                self._handle_mapping_resolve_canonical(query)
+                return
             self._send_json(404, {"error": "not found"})
+
+        def _query_param(self, query: dict, name: str) -> str | None:
+            values = query.get(name)
+            return values[0] if values else None
+
+        def _handle_context_resolve(self, query: dict) -> None:
+            tenant_id = self._query_param(query, "tenant_id")
+            entity_id = self._query_param(query, "entity_id")
+            try:
+                with psycopg.connect(config.database_url) as connection:
+                    store = PostgresTenantMappingStore(connection)
+                    context = resolve_context(tenant_id, entity_id, store)
+            except ContextResolutionError as exc:
+                self._send_json(404, {"error": str(exc)})
+                return
+            self._send_json(200, {"ad_client_id": context.ad_client_id, "ad_org_id": context.ad_org_id})
+
+        def _handle_mapping_resolve(self, query: dict) -> None:
+            tenant_id = self._query_param(query, "tenant_id")
+            canonical_type = self._query_param(query, "canonical_type")
+            canonical_id = self._query_param(query, "canonical_id")
+            if not tenant_id or not canonical_type or not canonical_id:
+                self._send_json(
+                    400, {"error": "tenant_id, canonical_type and canonical_id are all required"}
+                )
+                return
+            try:
+                with psycopg.connect(config.database_url) as connection:
+                    store = PostgresCanonicalMappingStore(connection)
+                    ref = resolve_to_native(tenant_id, canonical_type, canonical_id, store)
+            except MappingNotFoundError as exc:
+                self._send_json(404, {"error": str(exc)})
+                return
+            self._send_json(200, {"table": ref.table, "record_id": ref.record_id})
+
+        def _handle_mapping_resolve_canonical(self, query: dict) -> None:
+            tenant_id = self._query_param(query, "tenant_id")
+            table = self._query_param(query, "table")
+            record_id = self._query_param(query, "record_id")
+            if not tenant_id or not table or not record_id or not record_id.isdigit():
+                self._send_json(
+                    400, {"error": "tenant_id, table and a numeric record_id are all required"}
+                )
+                return
+            try:
+                with psycopg.connect(config.database_url) as connection:
+                    store = PostgresCanonicalMappingStore(connection)
+                    canonical_id = resolve_to_canonical(tenant_id, table, int(record_id), store)
+            except MappingNotFoundError as exc:
+                self._send_json(404, {"error": str(exc)})
+                return
+            self._send_json(200, {"canonical_id": canonical_id})
 
         def do_POST(self) -> None:  # noqa: N802 - stdlib method name
             if self.path == "/events/inbound":

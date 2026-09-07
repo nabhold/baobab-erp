@@ -43,16 +43,30 @@ systemd timer) rather than as a long-lived daemon.
 Pulse supplies signals and opportunities. It cannot write iDempiere tables directly; an
 ERP command handler decides whether and how intelligence becomes an operational record.
 
+## From inside iDempiere
+
+Code running inside iDempiere's own JVM (the OSGi bundles in `idempiere/extensions/`)
+has no direct access to the `baobab` Postgres schema either -- it reaches the same
+context/mapping resolution logic over HTTP, calling baobab-app's
+`GET /context/resolve` and `GET /mapping/resolve(-canonical)` endpoints. The shared
+`org.nabhold.baobab.erp.integration` bundle (`BaobabAppClient`, a small dependency-free
+JSON parser) is the one place that knows how to make that call; `context` and `mapping`
+each depend on it rather than duplicating HTTP/JSON handling. This keeps "who touches
+the `baobab` schema" answered the same way from both sides of the process boundary:
+only `modules/`, via baobab-app.
+
 ## Status
 
-The HTTP layer, outbox/inbox, and their Postgres-backed stores are wired end-to-end and
-covered by `tests/integration/` against a real database. `RestIdempiereClient` is a real,
-spec-verified implementation, tested against a fake server reproducing that spec -- but
-not yet against a real running iDempiere instance, because the REST API plugin it talks
-to **is not part of the pinned `idempiereofficial/idempiere` image**. It's a separate
-OSGi bundle that has to be built (Maven/Tycho) and installed into a running instance
-through iDempiere's p2 provisioning tooling; `idempiere/Dockerfile` does not do this yet.
-See `idempiere/README.md` and `architecture/conformance.yaml` against ADR-ERP-005 and
-ADR-ERP-013. The OSGi bundles' `BaobabContextResolver`/`BaobabMappingResolver` are also
-still unwired (nothing inside iDempiere calls them) -- tracked against ADR-ERP-002 and
-ADR-ERP-007.
+The HTTP layer (including `/context/resolve` and `/mapping/resolve*`), outbox/inbox,
+and their Postgres-backed stores are wired end-to-end and covered by
+`tests/integration/` against a real database. `BaobabContextResolver` and
+`BaobabMappingResolver` now call those endpoints for real, tested against a real local
+HTTP server reproducing baobab-app's exact response shapes (not mocked) -- see each
+bundle's `src/test/java/.../*ResolverTest.java`. `RestIdempiereClient` is a real, spec-verified
+implementation, tested the same way against a fake server reproducing the
+`bxservice/idempiere-rest` spec -- but not yet against a real running iDempiere
+instance, because that REST API plugin **is not part of the pinned
+`idempiereofficial/idempiere` image**. It's a separate OSGi bundle that has to be built
+(Maven/Tycho) and installed into a running instance through iDempiere's p2 provisioning
+tooling; `idempiere/Dockerfile` does not do this yet. See `idempiere/README.md` and
+`architecture/conformance.yaml` against ADR-ERP-005 and ADR-ERP-013.
