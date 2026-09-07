@@ -109,10 +109,12 @@ adrs:
       - modules/inbox/postgres_store.py
       - modules/application/server.py
       - modules/application/dispatch_worker.py
+      - modules/scripts/dispatch_worker_loop.sh
       - modules/integration/delivery_transport.py
       - db/migrations/0004_create_event_outbox.sql
       - db/migrations/0005_create_event_inbox.sql
       - contracts/events/
+      - compose.yaml
       - tests/integration/test_postgres_outbox_store.py
       - tests/integration/test_postgres_inbox_store.py
       - tests/integration/test_http_server.py
@@ -120,9 +122,18 @@ adrs:
       Record -> dispatch -> signed HTTP delivery -> mark-delivered, and
       receive -> verify -> deduplicate -> persist, are both proven end-to-end
       against a real Postgres database and real HTTP server (not just in-memory
-      fakes). dispatch_worker.py runs to completion and exits rather than being a
-      long-running daemon; it still needs an external scheduler (cron, systemd
-      timer) wired in a real deployment, which is not yet automated in compose.yaml.
+      fakes). dispatch_worker.py still runs to completion and exits by design
+      rather than being a long-running daemon, but that gap is now closed: the
+      baobab-dispatch-worker Compose service invokes it periodically via
+      modules/scripts/dispatch_worker_loop.sh (a plain, configurable sleep loop --
+      scheduling policy as deployment configuration, matching the worker's own
+      design intent, not a change to the worker itself). What's still open: the
+      loop is a shell sleep loop, not a real scheduler daemon (cron, a systemd
+      timer) -- fine for the single-host Compose topology this repository
+      supports today, but worth revisiting if/when ADR-ERP-013 moves past it; and
+      there's no retry/backoff between ticks beyond dispatch_worker.py's own
+      per-event backoff, so a failed tick just waits for the next fixed-interval
+      attempt.
 
   - id: ADR-ERP-007
     title: ERP canonical entity and external reference mapping architecture

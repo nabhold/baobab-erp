@@ -3,14 +3,21 @@
 `compose.yaml` provides the runtime baseline (Phase 4): a `postgres` service, an
 `idempiere` service built from `idempiere/Dockerfile` (pins the upstream image, stages
 in the Baobab OSGi extension bundles), a one-shot `baobab-db-migrate` service that
-applies `db/migrations/` before anything else starts, and a `baobab-app` service built
-from `modules/Dockerfile` exposing the HTTP application layer
+applies `db/migrations/` before anything else starts, a `baobab-app` service built from
+`modules/Dockerfile` exposing the HTTP application layer
 (`modules/application/server.py`: `/health/live`, `/health/ready`,
-`POST /events/inbound`).
+`POST /events/inbound`), and a `baobab-dispatch-worker` service (same image) that
+periodically invokes `modules/application/dispatch_worker.py` to drain the event
+outbox.
 
-`modules/application/dispatch_worker.py` (outbox delivery) is not a compose service --
-it runs to completion and exits, meant to be invoked periodically by an external
-scheduler (cron, a systemd timer) rather than as a long-lived daemon.
+`modules/application/dispatch_worker.py` (outbox delivery) runs to completion and exits
+by design -- it is not itself a long-lived daemon. The `baobab-dispatch-worker` Compose
+service supplies the periodic invocation (`modules/scripts/dispatch_worker_loop.sh`, a
+plain sleep loop configurable via `BAOBAB_DISPATCH_INTERVAL_SECONDS`, default 60s): the
+loop is deployment configuration, not application code, and a failed tick is logged and
+retried on the next tick rather than crashing the loop. A non-Compose deployment can
+instead point cron or a systemd timer directly at `python -m application.dispatch_worker`
+on the same schedule.
 
 ## Production requirements
 
@@ -24,8 +31,9 @@ scheduler (cron, a systemd timer) rather than as a long-lived daemon.
    before promoting a release.
 6. Apply `db/migrations/` as a controlled pre-deployment step (`baobab-db-migrate` in
    Compose, or `db/migrate.sh` directly).
-7. Schedule `modules/application/dispatch_worker.py` to run periodically (every minute
-   or so) so outbox events actually get delivered.
+7. `modules/application/dispatch_worker.py` runs periodically via the
+   `baobab-dispatch-worker` Compose service by default; a non-Compose deployment must
+   schedule it itself (every minute or so) so outbox events actually get delivered.
 8. Monitor HTTP health (`/health/ready`), outbox backlog and dead-letter count, database
    capacity, disk capacity, and certificate expiry.
 

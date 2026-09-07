@@ -81,5 +81,23 @@ services:
       timeout: 5s
       retries: 20
 
+  baobab-dispatch-worker:
+    build:
+      context: .
+      dockerfile: modules/Dockerfile
+    image: ${BAOBAB_APP_IMAGE_TAG:-baobab-app:local}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      baobab-db-migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-adempiere}:${DB_PASS:?Set DB_PASS}@postgres:5432/${DB_NAME:-idempiere}
+      BAOBAB_EVENT_SIGNING_SECRET: ${BAOBAB_EVENT_SIGNING_SECRET:?Set BAOBAB_EVENT_SIGNING_SECRET}
+      BAOBAB_WEBHOOK_URL: ${BAOBAB_WEBHOOK_URL:?Set BAOBAB_WEBHOOK_URL}
+      BAOBAB_DISPATCH_INTERVAL_SECONDS: ${BAOBAB_DISPATCH_INTERVAL_SECONDS:-60}
+    entrypoint: ["bash", "/app/scripts/dispatch_worker_loop.sh"]
+
 volumes:
   postgres-data:

@@ -32,5 +32,6 @@ fi
 if [[ "${SKIP_COMPOSE_VALIDATION:-0}" != "1" ]] && command -v docker >/dev/null 2>&1; then
   DB_PASS=validation DB_ADMIN_PASS=validation \
   BAOBAB_EVENT_SIGNING_SECRET=validation \
+  BAOBAB_WEBHOOK_URL=https://validation.example.com/baobab/events \
   docker compose -f compose.yaml config --quiet
 fi
