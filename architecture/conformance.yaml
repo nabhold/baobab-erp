@@ -214,19 +214,37 @@ adrs:
     status: partial
     evidence:
       - modules/security/signing.py
+      - modules/security/workload_auth.py
+      - modules/security/jwks.py
       - modules/context/resolver.py
       - modules/context/postgres_store.py
       - modules/identity/service.py
       - modules/application/server.py
+      - tests/security/test_workload_auth.py
       - tests/tenancy/test_context_resolver.py
       - tests/integration/test_http_server.py
     gap: >
       Fail-closed context resolution and HMAC signature verification are now proven
       against a real database and a real HTTP round trip (valid signature accepted,
       invalid signature rejected with 401, before the envelope is even parsed), not
-      just in-memory fakes. There is still no real IdP/authentication integration;
-      ServiceIdentity remains a data carrier only, and the HTTP layer has no
-      authentication of its own beyond the event-signing secret.
+      just in-memory fakes. Gate IAM-10 (ADR-0014 §111) closed the real IdP integration
+      gap for machine callers: /context/resolve* and /mapping/resolve* now require a
+      Baobab IAM-issued workload bearer token (actor_type=workload, aud=baobab-erp,
+      verified against Baobab IAM's real JWKS via PyJWT) instead of trusting network
+      location alone -- security.workload_auth.verify_workload_token, tested against a
+      real generated RSA keypair (tests/security/test_workload_auth.py) and end-to-end
+      over real HTTP (tests/integration/test_http_server.py's 401 cases: missing
+      token, wrong audience, malformed scheme). ServiceIdentity is no longer only a
+      data carrier with nothing constructing it -- verify_workload_token is the first
+      real caller. What's still open: this authenticates callers, it doesn't yet
+      authorize by role (every valid workload token can call every endpoint; no
+      per-endpoint scope check beyond audience), and human ERP login (iDempiere's own
+      WebUI, via its built-in org.idempiere.ui.sso.oidc plugin) is configured as an
+      operational runbook (docs/sso-configuration.md) rather than anything this
+      repository's own code touches, since AD_SSO_PrincipalConfig lives in iDempiere's
+      own schema (ADR-ERP-001) -- see nabhold/baobab-iam's
+      docs/governance/gate-iam-10-erp-integration-scope.md for the full human-login
+      picture, including one explicitly accepted deviation from ADR-0014 §9.
 
   - id: ADR-ERP-011
     title: ERP observability, audit, reconciliation and operational control architecture

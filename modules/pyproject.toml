@@ -5,6 +5,7 @@ description = "Baobab ERP application-service layer: context, mapping, events, a
 requires-python = ">=3.11"
 dependencies = [
     "psycopg[binary]>=3.1,<4",
+    "PyJWT[crypto]>=2.8,<3",
 ]
 
 [build-system]

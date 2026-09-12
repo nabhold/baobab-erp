@@ -90,6 +90,23 @@ topology unmodified). Overriding it in a real deployment means passing
 no comparable per-tenant configuration of its own: it derives the tenant per event from
 data already on the record, over the same already-defaulted baobab-app connection.
 
+Since Gate IAM-10 (ADR-0014 §111), baobab-app's `/context/resolve*`/`/mapping/resolve*`
+require a Baobab IAM workload bearer token -- `context` and `mapping`'s `BaobabAppClient`
+now attach one via `WorkloadTokenProviderFactory.fromSystemProperties()`
+(`org.nabhold.baobab.erp.integration`), which reads:
+
+- `baobab.iam.token.url` -- Baobab IAM's token endpoint, e.g.
+  `https://iam.example.com/realms/baobab/protocol/openid-connect/token`.
+- `baobab.iam.workload.client.id` -- defaults to `baobab-erp-workload`.
+- `baobab.iam.workload.client.secret` -- **required**; no default. If unset, the
+  factory returns no provider and every context/mapping call gets a 401 from
+  baobab-app (a loud, visible failure at call time, not a silent bypass) -- see
+  `docs/sso-configuration.md`.
+- `baobab.iam.workload.scope` -- defaults to `erp:integrate`.
+
+Like `baobab.app.base.url`, none of these are wired into the pinned image's own JVM
+launch yet; a real deployment passes them the same way.
+
 ## Building
 
 ```bash

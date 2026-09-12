@@ -16,21 +16,38 @@ import java.util.Map;
  * it has no direct database access of its own (ADR-ERP-005). One instance per
  * resolver is fine: {@link HttpClient} is thread-safe and reusing it lets the JVM
  * pool connections.
+ *
+ * <p>baobab-app's /context/resolve* and /mapping/resolve* now require a Baobab
+ * IAM-issued workload bearer token (ADR-0014 §111, Gate IAM-10) -- when a {@link
+ * WorkloadTokenProvider} is supplied, every request carries one. The no-provider
+ * constructors remain only for tests that talk to a fake server with no auth gate;
+ * every real resolver ({@code BaobabContextResolver}, {@code
+ * BaobabMappingResolver}) always supplies one.
  */
 public final class BaobabAppClient {
 
     private final String baseUrl;
     private final Duration timeout;
     private final HttpClient httpClient;
+    private final WorkloadTokenProvider tokenProvider;
 
     public BaobabAppClient(String baseUrl) {
         this(baseUrl, Duration.ofSeconds(10));
     }
 
     public BaobabAppClient(String baseUrl, Duration timeout) {
+        this(baseUrl, timeout, null);
+    }
+
+    public BaobabAppClient(String baseUrl, WorkloadTokenProvider tokenProvider) {
+        this(baseUrl, Duration.ofSeconds(10), tokenProvider);
+    }
+
+    public BaobabAppClient(String baseUrl, Duration timeout, WorkloadTokenProvider tokenProvider) {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.timeout = timeout;
         this.httpClient = HttpClient.newBuilder().connectTimeout(timeout).build();
+        this.tokenProvider = tokenProvider;
     }
 
     public static String encodeQueryParam(String value) {
@@ -44,12 +61,14 @@ public final class BaobabAppClient {
      * @throws BaobabAppClientException   on any other failure to get a usable answer.
      */
     public Map<String, Object> get(String pathAndQuery) throws BaobabAppClientException {
-        HttpRequest request = HttpRequest.newBuilder()
+        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + pathAndQuery))
                 .timeout(timeout)
-                .header("Accept", "application/json")
-                .GET()
-                .build();
+                .header("Accept", "application/json");
+        if (tokenProvider != null) {
+            requestBuilder.header("Authorization", "Bearer " + tokenProvider.getAccessToken());
+        }
+        HttpRequest request = requestBuilder.GET().build();
 
         HttpResponse<String> response;
         try {
