@@ -73,6 +73,11 @@ services:
       DATABASE_URL: postgresql://${DB_USER:-adempiere}:${DB_PASS:?Set DB_PASS}@postgres:5432/${DB_NAME:-idempiere}
       BAOBAB_EVENT_SIGNING_SECRET: ${BAOBAB_EVENT_SIGNING_SECRET:?Set BAOBAB_EVENT_SIGNING_SECRET}
       HTTP_PORT: ${BAOBAB_APP_PORT:-8000}
+      # Gate IAM-10 (ADR-0014 §111): baobab-app validates every
+      # /context/resolve*|/mapping/resolve* caller's bearer token against
+      # this issuer's JWKS before trusting network location alone.
+      BAOBAB_IAM_OIDC_ISSUER: ${BAOBAB_IAM_OIDC_ISSUER:?Set BAOBAB_IAM_OIDC_ISSUER}
+      BAOBAB_IAM_OIDC_AUDIENCE: ${BAOBAB_IAM_OIDC_AUDIENCE:-baobab-erp}
     ports:
       - "${BAOBAB_APP_PORT:-8000}:8000"
     healthcheck:

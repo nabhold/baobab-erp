@@ -11,10 +11,10 @@ Each request opens its own short-lived Postgres connection: psycopg connections
 are not safe to share across the threads ThreadingHTTPServer uses for concurrent
 requests.
 
-/context/resolve* and /mapping/resolve* have no authentication of their own yet --
-they rely on network-level trust (only reachable from inside the deployment's own
-network, e.g. the Compose network), same gap already noted for the rest of this
-module against ADR-ERP-010.
+/context/resolve* and /mapping/resolve* require a Baobab IAM-issued workload
+bearer token (actor_type=workload, aud=baobab-erp, ADR-0014 §111) -- see
+security.workload_auth. They no longer rely on network-level trust alone,
+closing the gap this module's own docstring used to note here (ADR-ERP-010).
 """
 
 import json
@@ -30,6 +30,8 @@ from context.postgres_store import PostgresTenantMappingStore
 from context.resolver import resolve_context, resolve_tenant
 from inbox.postgres_store import PostgresInboxStore
 from inbox.service import InvalidSignatureError, receive
+from security.jwks import JwksSigningKeyResolver
+from security.workload_auth import SigningKeyResolver, TokenValidationError, verify_workload_token
 from mapping.model import MappingNotFoundError
 from mapping.postgres_store import PostgresCanonicalMappingStore
 from mapping.resolver import resolve_to_canonical, resolve_to_native
@@ -49,6 +51,8 @@ class Config:
         self.database_url = _require_env("DATABASE_URL")
         self.event_signing_secret = _require_env("BAOBAB_EVENT_SIGNING_SECRET")
         self.port = int(os.environ.get("HTTP_PORT", "8000"))
+        self.workload_oidc_issuer = _require_env("BAOBAB_IAM_OIDC_ISSUER")
+        self.workload_oidc_audience = os.environ.get("BAOBAB_IAM_OIDC_AUDIENCE", "baobab-erp")
 
 
 def _require_env(name: str) -> str:
@@ -58,7 +62,19 @@ def _require_env(name: str) -> str:
     return value
 
 
-def make_handler(config: Config) -> type[BaseHTTPRequestHandler]:
+# Endpoints an authenticated Baobab IAM workload token gates (ADR-0014 §111). Kept
+# as an explicit allowlist rather than "everything except health/events" so a new
+# unauthenticated route is never accidentally exempt by omission.
+_WORKLOAD_AUTHENTICATED_PATHS = frozenset(
+    {"/context/resolve", "/context/resolve-tenant", "/mapping/resolve", "/mapping/resolve-canonical"}
+)
+
+
+def make_handler(config: Config, key_resolver: SigningKeyResolver | None = None) -> type[BaseHTTPRequestHandler]:
+    resolver = key_resolver or JwksSigningKeyResolver(
+        f"{config.workload_oidc_issuer}/protocol/openid-connect/certs"
+    )
+
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format: str, *args) -> None:  # noqa: A002 - stdlib signature
             pass  # structured logging is deployment configuration, not hard-coded here
@@ -70,6 +86,24 @@ def make_handler(config: Config) -> type[BaseHTTPRequestHandler]:
             self.send_header("Content-Length", str(len(payload)))
             self.end_headers()
             self.wfile.write(payload)
+
+        def _authenticate_workload(self) -> bool:
+            """Returns True and lets the caller proceed, or sends a 401 itself and
+            returns False. The identity isn't used by any handler yet (none of these
+            endpoints vary their response by caller) -- this is authentication, not
+            authorization; per-workload scoping is future work if a real need for it
+            arises."""
+            try:
+                verify_workload_token(
+                    self.headers.get("Authorization"),
+                    issuer=config.workload_oidc_issuer,
+                    audience=config.workload_oidc_audience,
+                    key_resolver=resolver,
+                )
+                return True
+            except TokenValidationError as exc:
+                self._send_json(401, {"error": str(exc)})
+                return False
 
         def do_GET(self) -> None:  # noqa: N802 - stdlib method name
             split = urlsplit(self.path)
@@ -84,6 +118,8 @@ def make_handler(config: Config) -> type[BaseHTTPRequestHandler]:
                         self._send_json(200, readiness(PsycopgProbe(connection)))
                 except Exception as exc:  # noqa: BLE001 - reported as a 503, not raised
                     self._send_json(503, {"status": "not_ready", "error": str(exc)})
+                return
+            if split.path in _WORKLOAD_AUTHENTICATED_PATHS and not self._authenticate_workload():
                 return
             if split.path == "/context/resolve":
                 self._handle_context_resolve(query)

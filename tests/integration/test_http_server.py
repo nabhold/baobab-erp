@@ -3,6 +3,7 @@ import hmac
 import json
 import os
 import random
+import time
 import unittest
 import urllib.error
 import urllib.request
@@ -10,11 +11,25 @@ import uuid
 from http.server import ThreadingHTTPServer
 from threading import Thread
 
+import jwt
 import psycopg
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 from _postgres import require_database_url
 
 SECRET = "integration-test-secret"
+OIDC_ISSUER = "https://iam.example.invalid/realms/baobab"
+
+
+class _FixedKeyResolver:
+    """A SigningKeyResolver returning a fixed key, standing in for a real Baobab
+    IAM JWKS fetch -- this test suite has no live IAM instance to fetch one from."""
+
+    def __init__(self, key):
+        self._key = key
+
+    def resolve(self, token: str):
+        return self._key
 
 
 class HttpServerIntegrationTests(unittest.TestCase):
@@ -23,14 +38,36 @@ class HttpServerIntegrationTests(unittest.TestCase):
         database_url = require_database_url()  # skips the whole class if unset
         os.environ["DATABASE_URL"] = database_url
         os.environ["BAOBAB_EVENT_SIGNING_SECRET"] = SECRET
+        os.environ["BAOBAB_IAM_OIDC_ISSUER"] = OIDC_ISSUER
+
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        cls.workload_token = cls._mint_workload_token(private_key)
+        cls.wrong_audience_token = cls._mint_workload_token(private_key, aud="baobab-control-plane")
 
         from application.server import Config, make_handler
 
         config = Config()
-        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(config))
+        handler = make_handler(config, key_resolver=_FixedKeyResolver(private_key.public_key()))
+        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         cls.port = cls.server.server_address[1]
         cls.thread = Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
+
+    @staticmethod
+    def _mint_workload_token(private_key, **overrides) -> str:
+        now = int(time.time())
+        claims = {
+            "iss": OIDC_ISSUER,
+            "aud": "baobab-erp",
+            "sub": "service-account-baobab-erp-workload",
+            "azp": "baobab-erp-workload",
+            "actor_type": "workload",
+            "scope": "erp:integrate",
+            "iat": now,
+            "exp": now + 300,
+        }
+        claims.update(overrides)
+        return jwt.encode(claims, private_key, algorithm="RS256")
 
     @classmethod
     def tearDownClass(cls):
@@ -40,13 +77,17 @@ class HttpServerIntegrationTests(unittest.TestCase):
     def _url(self, path: str) -> str:
         return f"http://127.0.0.1:{self.port}{path}"
 
-    def _get(self, path: str):
-        request = urllib.request.Request(self._url(path))
+    def _get(self, path: str, authorization: str | None = None):
+        headers = {"Authorization": authorization} if authorization else {}
+        request = urllib.request.Request(self._url(path), headers=headers)
         try:
             with urllib.request.urlopen(request) as response:
                 return response.status, json.loads(response.read())
         except urllib.error.HTTPError as exc:
             return exc.code, json.loads(exc.read())
+
+    def _get_as_workload(self, path: str):
+        return self._get(path, authorization=f"Bearer {self.workload_token}")
 
     def _post_event(self, body: bytes, signature: str):
         request = urllib.request.Request(
@@ -123,11 +164,11 @@ class HttpServerIntegrationTests(unittest.TestCase):
                 )
             connection.commit()
             try:
-                status, body = self._get(f"/context/resolve?tenant_id={tenant_id}&entity_id={entity_id}")
+                status, body = self._get_as_workload(f"/context/resolve?tenant_id={tenant_id}&entity_id={entity_id}")
                 self.assertEqual(status, 200)
                 self.assertEqual(body, {"ad_client_id": ad_client_id, "ad_org_id": 1})
 
-                status, _ = self._get(f"/context/resolve?tenant_id={tenant_id}&entity_id=no-such-entity")
+                status, _ = self._get_as_workload(f"/context/resolve?tenant_id={tenant_id}&entity_id=no-such-entity")
                 self.assertEqual(status, 404)
             finally:
                 with connection.cursor() as cursor:
@@ -149,14 +190,14 @@ class HttpServerIntegrationTests(unittest.TestCase):
                 )
             connection.commit()
             try:
-                status, body = self._get(f"/context/resolve-tenant?ad_client_id={ad_client_id}&ad_org_id=1")
+                status, body = self._get_as_workload(f"/context/resolve-tenant?ad_client_id={ad_client_id}&ad_org_id=1")
                 self.assertEqual(status, 200)
                 self.assertEqual(body, {"tenant_id": tenant_id, "entity_id": entity_id})
 
-                status, _ = self._get("/context/resolve-tenant?ad_client_id=888888&ad_org_id=999")
+                status, _ = self._get_as_workload("/context/resolve-tenant?ad_client_id=888888&ad_org_id=999")
                 self.assertEqual(status, 404)
 
-                status, _ = self._get("/context/resolve-tenant?ad_client_id=notanumber&ad_org_id=1")
+                status, _ = self._get_as_workload("/context/resolve-tenant?ad_client_id=notanumber&ad_org_id=1")
                 self.assertEqual(status, 400)
             finally:
                 with connection.cursor() as cursor:
@@ -178,19 +219,19 @@ class HttpServerIntegrationTests(unittest.TestCase):
                 )
             connection.commit()
             try:
-                status, body = self._get(
+                status, body = self._get_as_workload(
                     f"/mapping/resolve?tenant_id={tenant_id}&canonical_type=Party&canonical_id={canonical_id}"
                 )
                 self.assertEqual(status, 200)
                 self.assertEqual(body, {"table": "C_BPartner", "record_id": 1001})
 
-                status, body = self._get(
+                status, body = self._get_as_workload(
                     f"/mapping/resolve-canonical?tenant_id={tenant_id}&table=C_BPartner&record_id=1001"
                 )
                 self.assertEqual(status, 200)
                 self.assertEqual(body, {"canonical_id": canonical_id})
 
-                status, _ = self._get(f"/mapping/resolve-canonical?tenant_id={tenant_id}&table=C_BPartner&record_id=999999")
+                status, _ = self._get_as_workload(f"/mapping/resolve-canonical?tenant_id={tenant_id}&table=C_BPartner&record_id=999999")
                 self.assertEqual(status, 404)
             finally:
                 with connection.cursor() as cursor:
@@ -198,8 +239,38 @@ class HttpServerIntegrationTests(unittest.TestCase):
                 connection.commit()
 
     def test_mapping_resolve_missing_params_is_400(self):
-        status, _ = self._get("/mapping/resolve?tenant_id=x")
+        status, _ = self._get_as_workload("/mapping/resolve?tenant_id=x")
         self.assertEqual(status, 400)
+
+    def test_context_resolve_without_a_token_is_401(self):
+        # ADR-0014 §111: network location alone must no longer be enough.
+        status, _ = self._get("/context/resolve?tenant_id=x&entity_id=y")
+        self.assertEqual(status, 401)
+
+    def test_mapping_resolve_without_a_token_is_401(self):
+        status, _ = self._get("/mapping/resolve?tenant_id=x&canonical_type=Party&canonical_id=y")
+        self.assertEqual(status, 401)
+
+    def test_context_resolve_with_wrong_audience_token_is_401(self):
+        # A token scoped for baobab-control-plane (context:resolve) must not also
+        # work against baobab-erp's own boundary (ADR-0007 §§24-25).
+        status, _ = self._get(
+            "/context/resolve?tenant_id=x&entity_id=y",
+            authorization=f"Bearer {self.wrong_audience_token}",
+        )
+        self.assertEqual(status, 401)
+
+    def test_context_resolve_with_malformed_authorization_header_is_401(self):
+        status, _ = self._get("/context/resolve?tenant_id=x&entity_id=y", authorization="not-a-bearer-token")
+        self.assertEqual(status, 401)
+
+    def test_health_and_events_endpoints_need_no_workload_token(self):
+        # Health probes and the signed-event webhook have their own, separate
+        # trust mechanisms (liveness/readiness are unauthenticated by design;
+        # /events/inbound is HMAC-signed) -- they must not be caught by the new
+        # workload-token gate.
+        status, _ = self._get("/health/live")
+        self.assertEqual(status, 200)
 
 
 if __name__ == "__main__":

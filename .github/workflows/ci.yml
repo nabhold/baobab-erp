@@ -42,6 +42,7 @@ jobs:
           DB_ADMIN_PASS: validation
           BAOBAB_EVENT_SIGNING_SECRET: validation
           BAOBAB_WEBHOOK_URL: https://validation.example.com/baobab/events
+          BAOBAB_IAM_OIDC_ISSUER: https://validation.example.com/realms/baobab
         run: docker compose -f compose.yaml config --quiet
 
   build-extensions:

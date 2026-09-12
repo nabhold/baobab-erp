@@ -4,6 +4,7 @@ import java.util.Map;
 import org.nabhold.baobab.erp.integration.BaobabAppClient;
 import org.nabhold.baobab.erp.integration.BaobabAppClientException;
 import org.nabhold.baobab.erp.integration.BaobabAppNotFoundException;
+import org.nabhold.baobab.erp.integration.WorkloadTokenProviderFactory;
 
 /**
  * Resolves tenant/legal-entity context by calling baobab-app's
@@ -22,7 +23,8 @@ final class BaobabContextResolver implements ContextResolver {
     private final BaobabAppClient client;
 
     BaobabContextResolver() {
-        this(new BaobabAppClient(System.getProperty(BASE_URL_PROPERTY, DEFAULT_BASE_URL)));
+        this(new BaobabAppClient(System.getProperty(BASE_URL_PROPERTY, DEFAULT_BASE_URL),
+                WorkloadTokenProviderFactory.fromSystemProperties()));
     }
 
     BaobabContextResolver(BaobabAppClient client) {

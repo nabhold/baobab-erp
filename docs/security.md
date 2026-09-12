@@ -8,7 +8,9 @@ page covers the security architecture referenced there (ADR-ERP-010).
 ```text
 Identity
    ↓
-Authentication (approved platform IdP; not this repository's concern)
+Authentication (Baobab IAM; workload callers verified in this repository -- see below;
+                human iDempiere WebUI login is iDempiere's own built-in OIDC plugin,
+                configured per docs/sso-configuration.md)
    ↓
 Trusted Principal (modules/identity.ServiceIdentity)
    ↓
@@ -30,6 +32,11 @@ iDempiere native authorization (AD_Role / AD_Client / AD_Org)
   record.
 - `modules/inbox.receive` rejects an inbound event whose signature does not verify
   (`InvalidSignatureError`) before the envelope is even parsed for business fields.
+- `security.workload_auth.verify_workload_token` (Gate IAM-10, ADR-0014 §111) rejects
+  any `/context/resolve*`/`/mapping/resolve*` request with a missing, malformed,
+  wrong-issuer, wrong-audience, expired, or non-`workload`-actor bearer token before
+  either surface runs at all -- `application/server.py` maps every rejection reason to
+  the same 401, so a caller can't use the response to calibrate a forged token.
 
 ## Cross-tenant access
 

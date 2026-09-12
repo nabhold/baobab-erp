@@ -6,6 +6,12 @@ cd "${repo_root}"
 
 python -m compileall -q modules tests
 
+# tests/security/test_workload_auth.py (Gate IAM-10) is the first test outside
+# tests/integration to need a third-party dependency (PyJWT, for real RS256
+# verification against a generated keypair rather than a hand-rolled check) --
+# install modules/ here too, matching ci.yml's core-module-integration job.
+pip install --break-system-packages -q -e modules
+
 PYTHONPATH=modules python -m unittest discover -s tests/unit -p 'test_*.py'
 PYTHONPATH=modules python -m unittest discover -s tests/security -p 'test_*.py'
 PYTHONPATH=modules python -m unittest discover -s tests/tenancy -p 'test_*.py'

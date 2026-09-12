@@ -81,6 +81,7 @@ external backups, monitoring, and tested recovery procedures.
 - [Security](docs/security.md)
 - [Operations](docs/operations.md)
 - [Provisioning](docs/provisioning.md)
+- [SSO configuration](docs/sso-configuration.md)
 - [ADRs](docs/adr/README.md)
 - [Migration programme](docs/migration/00-target-architecture.md)
 

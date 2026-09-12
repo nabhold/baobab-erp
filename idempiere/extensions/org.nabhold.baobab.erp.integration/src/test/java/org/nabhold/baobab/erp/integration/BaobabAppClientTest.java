@@ -1,6 +1,7 @@
 package org.nabhold.baobab.erp.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -10,6 +11,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,11 +25,14 @@ class BaobabAppClientTest {
 
     private HttpServer server;
     private BaobabAppClient client;
+    private AtomicReference<String> lastAuthorizationHeader;
 
     @BeforeEach
     void startServer() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        lastAuthorizationHeader = new AtomicReference<>();
         server.createContext("/context/resolve", exchange -> {
+            lastAuthorizationHeader.set(exchange.getRequestHeaders().getFirst("Authorization"));
             String query = exchange.getRequestURI().getQuery();
             if (query != null && query.contains("entity_id=nabhold-legal")) {
                 respond(exchange, 200, "{\"ad_client_id\": 1000, \"ad_org_id\": 1}");
@@ -37,6 +42,8 @@ class BaobabAppClientTest {
         });
         server.createContext("/broken", exchange -> respond(exchange, 200, "not json"));
         server.createContext("/boom", exchange -> respond(exchange, 500, "{\"error\": \"kaboom\"}"));
+        server.createContext("/token",
+                exchange -> respond(exchange, 200, "{\"access_token\": \"tok-123\", \"expires_in\": 300}"));
         server.start();
         client = new BaobabAppClient("http://127.0.0.1:" + server.getAddress().getPort());
     }
@@ -87,5 +94,20 @@ class BaobabAppClientTest {
     void unreachableServerRaisesClientException() {
         BaobabAppClient unreachable = new BaobabAppClient("http://127.0.0.1:1", java.time.Duration.ofSeconds(2));
         assertThrows(BaobabAppClientException.class, () -> unreachable.get("/context/resolve"));
+    }
+
+    @Test
+    void sendsNoAuthorizationHeaderWithoutATokenProvider() throws Exception {
+        client.get("/context/resolve?tenant_id=x&entity_id=nabhold-legal");
+        assertNull(lastAuthorizationHeader.get());
+    }
+
+    @Test
+    void attachesABearerTokenWhenATokenProviderIsSupplied() throws Exception {
+        String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
+        WorkloadTokenProvider provider = new WorkloadTokenProvider(baseUrl + "/token", "id", "secret", "scope");
+        BaobabAppClient authenticated = new BaobabAppClient(baseUrl, provider);
+        authenticated.get("/context/resolve?tenant_id=x&entity_id=nabhold-legal");
+        assertEquals("Bearer tok-123", lastAuthorizationHeader.get());
     }
 }
